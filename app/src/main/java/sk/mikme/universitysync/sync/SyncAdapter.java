@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
 import sk.mikme.universitysync.provider.Provider;
 
@@ -119,9 +120,21 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             // find new items
             updateNotes(notes, c, syncResult);
         }
+        else if (!jsonObject.isNull(Group.PATH)) {
+            // parse groups from JSON object
+            HashMap<String, Group> groups = DataParser.parseGroups(jsonObject);
+            // get groups prom database
+            Cursor c = contentResolver.query(
+                    Group.URI,
+                    Group.PROJECTION,
+                    null, null, null);
+            // find new items
+            updateGroups(groups, c, syncResult);
+        }
     }
 
-    private SyncResult updateNotes(HashMap<String, Note> notes, Cursor c, SyncResult syncResult) throws RemoteException, OperationApplicationException {
+    private SyncResult updateNotes(HashMap<String, Note> notes, Cursor c, SyncResult syncResult)
+            throws RemoteException, OperationApplicationException {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
         int id;
         String noteId;
@@ -169,6 +182,67 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         mContentResolver.applyBatch(Provider.AUTHORITY, batch);
         mContentResolver.notifyChange(
                 Note.URI,
+                null,
+                false);                         // IMPORTANT: Do not sync to network
+        // This sample doesn't support uploads, but if *your* code does, make sure you set
+        // syncToNetwork=false in the line above to prevent duplicate syncs.
+        return syncResult;
+    }
+
+    private SyncResult updateGroups(HashMap<String, Group> groups, Cursor c, SyncResult syncResult)
+            throws RemoteException, OperationApplicationException {
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        int id;
+        String groupId, name, university, info, memberInfo;
+        boolean isPublic;
+        while (c.moveToNext()) {
+            id = c.getInt(Note.COLUMN_ID);
+            groupId = Integer.toString(c.getInt(Group.COLUMN_GROUP_ID));
+            name = c.getString(Group.COLUMN_NAME);
+            university = c.getString(Group.COLUMN_UNIVERSITY);
+            info = c.getString(Group.COLUMN_INFO);
+            isPublic = c.getInt(Group.COLUMN_PUBLIC) == 1;
+            memberInfo = c.getString(Group.COLUMN_MEMBER_INFO);
+            syncResult.stats.numEntries++;
+            Group match = groups.get(groupId);
+            if (match != null) {
+                groups.remove(groupId);
+                Uri existingUri = Group.URI.buildUpon()
+                        .appendPath(Integer.toString(id)).build();
+                // if remote version is newer than local one
+                if (match.getName() != name || match.getUniversity() != university ||
+                        match.getInfo() != info || match.isPublic() != isPublic ||
+                        match.getMemberInfo() != memberInfo) {
+                    // update existing record
+                    batch.add(ContentProviderOperation.newUpdate(existingUri)
+                            .withValue(Group.COLUMN_NAME_GROUP_ID, match.getGroupId())
+                            .withValue(Group.COLUMN_NAME_NAME, match.getName())
+                            .withValue(Group.COLUMN_NAME_UNIVERSITY, match.getUniversity())
+                            .withValue(Group.COLUMN_NAME_INFO, match.getInfo())
+                            .withValue(Group.COLUMN_NAME_PUBLIC, match.isPublic() ? 1 : 0)
+                            .withValue(Group.COLUMN_NAME_MEMBER_INFO, match.getMemberInfo())
+                            .build());
+                    syncResult.stats.numUpdates++;
+                }
+            }
+        }
+        c.close();
+
+        // Add new notes
+        for (Group group : groups.values()) {
+            batch.add(ContentProviderOperation.newInsert(Group.URI)
+                    .withValue(Group.COLUMN_NAME_GROUP_ID, group.getGroupId())
+                    .withValue(Group.COLUMN_NAME_NAME, group.getName())
+                    .withValue(Group.COLUMN_NAME_UNIVERSITY, group.getUniversity())
+                    .withValue(Group.COLUMN_NAME_INFO, group.getInfo())
+                    .withValue(Group.COLUMN_NAME_PUBLIC, group.isPublic() ? 1 : 0)
+                    .withValue(Group.COLUMN_NAME_MEMBER_INFO, group.getMemberInfo())
+                    .build());
+            syncResult.stats.numInserts++;
+        }
+        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
+        mContentResolver.notifyChange(
+                Group.URI,
                 null,
                 false);                         // IMPORTANT: Do not sync to network
         // This sample doesn't support uploads, but if *your* code does, make sure you set
@@ -234,7 +308,8 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         // data has been deleted. (Note that it's possible to clear app data WITHOUT affecting
         // the account list, so wee need to check both.)
         if (newAccount || !setupComplete) {
-            triggerRefresh(Note.TABLE_NAME);
+            //triggerRefresh(Note.TABLE_NAME);
+            triggerRefresh(Group.TABLE_NAME);
             PreferenceManager.getDefaultSharedPreferences(context).edit()
                     .putBoolean(PREF_SETUP_COMPLETE, true).commit();
         }

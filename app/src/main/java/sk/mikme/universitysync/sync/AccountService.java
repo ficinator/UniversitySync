@@ -73,6 +73,7 @@ public class AccountService extends Service {
 //            Bundle bundle = new Bundle();
 //            bundle.putParcelable(AccountManager.KEY_INTENT, intent);
 //            return bundle;
+            // call the logindialogfragment to get users credentials
             return null;
         }
 

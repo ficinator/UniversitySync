@@ -38,6 +38,15 @@ public class Provider extends ContentProvider {
      * URI ID for route: /notes/{ID}
      */
     public static final int ROUTE_NOTES_ID = 2;
+    /**
+     * URI ID for route: /groups
+     */
+    public static final int ROUTE_GROUPS = 3;
+
+    /**
+     * URI ID for route: /groups/{ID}
+     */
+    public static final int ROUTE_GROUPS_ID = 4;
 
     /**
      * UriMatcher, used to decode incoming URIs.
@@ -46,6 +55,8 @@ public class Provider extends ContentProvider {
     static {
         sUriMatcher.addURI(AUTHORITY, "notes", ROUTE_NOTES);
         sUriMatcher.addURI(AUTHORITY, "notes/*", ROUTE_NOTES_ID);
+        sUriMatcher.addURI(AUTHORITY, "groups", ROUTE_GROUPS);
+        sUriMatcher.addURI(AUTHORITY, "groups/*", ROUTE_GROUPS_ID);
     }
 
     @Override
@@ -62,19 +73,33 @@ public class Provider extends ContentProvider {
                         String sortOrder) {
         SQLiteDatabase db = mDatabaseHelper.getReadableDatabase();
         SelectionBuilder builder = new SelectionBuilder();
+        String id = uri.getLastPathSegment();
+        Cursor c;
+        Context ctx = getContext();
         switch (sUriMatcher.match(uri)) {
             case ROUTE_NOTES_ID:
                 // Return a single note, by ID.
-                String id = uri.getLastPathSegment();
                 builder.where(Note._ID + "=?", id);
             case ROUTE_NOTES:
                 // Return all known entries.
                 builder.table(Note.TABLE_NAME)
                         .where(selection, selectionArgs);
-                Cursor c = builder.query(db, projection, sortOrder);
+                c = builder.query(db, projection, sortOrder);
                 // Note: Notification URI must be manually set here for loaders to correctly
                 // register ContentObservers.
-                Context ctx = getContext();
+                assert ctx != null;
+                c.setNotificationUri(ctx.getContentResolver(), uri);
+                return c;
+            case ROUTE_GROUPS_ID:
+                // Return a single note, by ID.
+                builder.where(Group._ID + "=?", id);
+            case ROUTE_GROUPS:
+                // Return all known entries.
+                builder.table(Group.TABLE_NAME)
+                        .where(selection, selectionArgs);
+                c = builder.query(db, projection, sortOrder);
+                // Note: Notification URI must be manually set here for loaders to correctly
+                // register ContentObservers.
                 assert ctx != null;
                 c.setNotificationUri(ctx.getContentResolver(), uri);
                 return c;
@@ -90,6 +115,10 @@ public class Provider extends ContentProvider {
                 return Note.TYPE;
             case ROUTE_NOTES_ID:
                 return Note.ITEM_TYPE;
+            case ROUTE_GROUPS:
+                return Group.TYPE;
+            case ROUTE_GROUPS_ID:
+                return Group.ITEM_TYPE;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -101,12 +130,19 @@ public class Provider extends ContentProvider {
         final SQLiteDatabase db = mDatabaseHelper.getWritableDatabase();
         assert db != null;
         Uri result;
+        long id;
         switch (sUriMatcher.match(uri)) {
             case ROUTE_NOTES:
-                long id = db.insertOrThrow(Note.TABLE_NAME, null, values);
+                id = db.insertOrThrow(Note.TABLE_NAME, null, values);
                 result = Uri.parse(Note.URI + "/" + id);
                 break;
             case ROUTE_NOTES_ID:
+                throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
+            case ROUTE_GROUPS:
+                id = db.insertOrThrow(Group.TABLE_NAME, null, values);
+                result = Uri.parse(Group.URI + "/" + id);
+                break;
+            case ROUTE_GROUPS_ID:
                 throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
@@ -126,6 +162,7 @@ public class Provider extends ContentProvider {
         final SQLiteDatabase db = mDatabaseHelper.getWritableDatabase();
         final int match = sUriMatcher.match(uri);
         int count;
+        String id = uri.getLastPathSegment();
         switch (match) {
             case ROUTE_NOTES:
                 count = builder.table(Note.TABLE_NAME)
@@ -133,9 +170,19 @@ public class Provider extends ContentProvider {
                         .delete(db);
                 break;
             case ROUTE_NOTES_ID:
-                String id = uri.getLastPathSegment();
                 count = builder.table(Note.TABLE_NAME)
                         .where(Note._ID + "=?", id)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_GROUPS:
+                count = builder.table(Group.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_GROUPS_ID:
+                count = builder.table(Group.TABLE_NAME)
+                        .where(Group._ID + "=?", id)
                         .where(selection, selectionArgs)
                         .delete(db);
                 break;
@@ -158,6 +205,7 @@ public class Provider extends ContentProvider {
         final SQLiteDatabase db = mDatabaseHelper.getWritableDatabase();
         final int match = sUriMatcher.match(uri);
         int count;
+        String id = uri.getLastPathSegment();
         switch (match) {
             case ROUTE_NOTES:
                 count = builder.table(Note.TABLE_NAME)
@@ -165,9 +213,19 @@ public class Provider extends ContentProvider {
                         .update(db, values);
                 break;
             case ROUTE_NOTES_ID:
-                String id = uri.getLastPathSegment();
                 count = builder.table(Note.TABLE_NAME)
                         .where(Note._ID + "=?", id)
+                        .where(selection, selectionArgs)
+                        .update(db, values);
+                break;
+            case ROUTE_GROUPS:
+                count = builder.table(Group.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .update(db, values);
+                break;
+            case ROUTE_GROUPS_ID:
+                count = builder.table(Group.TABLE_NAME)
+                        .where(Group._ID + "=?", id)
                         .where(selection, selectionArgs)
                         .update(db, values);
                 break;
@@ -196,7 +254,7 @@ public class Provider extends ContentProvider {
         private static final String TYPE_INTEGER = " INTEGER";
         private static final String COMMA_SEP = ",";
         /** SQL statement to create "note" table. */
-        private static final String SQL_CREATE_ENTRIES =
+        private static final String SQL_CREATE_NOTES =
                 "CREATE TABLE " + Note.TABLE_NAME + " (" +
                         Note._ID + " INTEGER PRIMARY KEY," +
                         Note.COLUMN_NAME_NOTE_ID + TYPE_INTEGER + COMMA_SEP +
@@ -206,8 +264,23 @@ public class Provider extends ContentProvider {
                         Note.COLUMN_NAME_DATE + TYPE_INTEGER + ")";
 
         /** SQL statement to drop "note" table. */
-        private static final String SQL_DELETE_ENTRIES =
+        private static final String SQL_DELETE_NOTES =
                 "DROP TABLE IF EXISTS " + Note.TABLE_NAME;
+
+        /** SQL statement to create "group" table. */
+        private static final String SQL_CREATE_GROUPS =
+                "CREATE TABLE " + Group.TABLE_NAME + " (" +
+                        Group._ID + " INTEGER PRIMARY KEY," +
+                        Group.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
+                        Group.COLUMN_NAME_NAME + TYPE_TEXT + COMMA_SEP +
+                        Group.COLUMN_NAME_UNIVERSITY + TYPE_TEXT + COMMA_SEP +
+                        Group.COLUMN_NAME_INFO + TYPE_TEXT + COMMA_SEP +
+                        Group.COLUMN_NAME_PUBLIC + TYPE_INTEGER + COMMA_SEP +
+                        Group.COLUMN_NAME_MEMBER_INFO + TYPE_TEXT + ")";
+
+        /** SQL statement to drop "group" table. */
+        private static final String SQL_DELETE_GROUPS =
+                "DROP TABLE IF EXISTS " + Group.TABLE_NAME;
 
         public Database(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -215,14 +288,16 @@ public class Provider extends ContentProvider {
 
         @Override
         public void onCreate(SQLiteDatabase db) {
-            db.execSQL(SQL_CREATE_ENTRIES);
+            db.execSQL(SQL_CREATE_GROUPS);
+            db.execSQL(SQL_CREATE_NOTES);
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
             // This database is only a cache for online data, so its upgrade policy is
             // to simply to discard the data and start over
-            db.execSQL(SQL_DELETE_ENTRIES);
+            db.execSQL(SQL_DELETE_NOTES);
+            db.execSQL(SQL_DELETE_GROUPS);
             onCreate(db);
         }
     }

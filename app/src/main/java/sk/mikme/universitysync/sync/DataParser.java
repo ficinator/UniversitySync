@@ -6,6 +6,7 @@ import org.json.JSONObject;
 
 import java.util.HashMap;
 
+import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
 
 /**
@@ -24,5 +25,15 @@ public class DataParser {
             notes.put(Integer.toString(note.getNoteId()), note);
         }
         return notes;
+    }
+
+    public static HashMap<String, Group> parseGroups(JSONObject jsonObject) throws JSONException {
+        JSONArray groupArray = jsonObject.getJSONArray(Group.PATH);
+        HashMap<String, Group> groups = new HashMap<String, Group>();
+        for (int i = 0; i < groupArray.length(); i++) {
+            Group group = new Group(groupArray.getJSONObject(i));
+            groups.put(Integer.toString(group.getGroupId()), group);
+        }
+        return groups;
     }
 }

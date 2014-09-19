@@ -27,12 +27,12 @@ public class Note implements BaseColumns {
      */
     public static final String PATH = "notes";
     /**
-     * MIME type for lists of entries.
+     * MIME type for lists of notes.
      */
     public static final String TYPE =
             ContentResolver.CURSOR_DIR_BASE_TYPE + "/vnd.universitysync.notes";
     /**
-     * MIME type for individual entries.
+     * MIME type for individual note.
      */
     public static final String ITEM_TYPE =
             ContentResolver.CURSOR_ITEM_BASE_TYPE + "/vnd.universitysync.note";
