@@ -1,10 +1,8 @@
 package sk.mikme.universitysync.sync;
 
 import android.accounts.Account;
-import android.accounts.AccountManager;
 import android.annotation.TargetApi;
 import android.content.AbstractThreadedSyncAdapter;
-import android.content.ContentProvider;
 import android.content.ContentProviderClient;
 import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
@@ -16,47 +14,55 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.RemoteException;
-import android.preference.PreferenceManager;
+import android.util.Base64;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.XML;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 
 import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
 import sk.mikme.universitysync.provider.Provider;
+import sk.mikme.universitysync.provider.User;
 
 /**
  * Created by fic on 18.9.2014.
  */
 public class SyncAdapter extends AbstractThreadedSyncAdapter {
-    private static final long SYNC_FREQUENCY = 60 * 60;  // 1 hour (in seconds)
+    public static final long SYNC_FREQUENCY = 60 * 60;  // 1 hour (in seconds)
     private static final String PREF_SETUP_COMPLETE = "setup_complete";
-    public static final String PREF_DATA_TYPE = "data_type";
+    public static final String AUTHTOKEN = "authToken";
 
     public static final String SERVER_URL = "http://www.universitysync.sk/android/";
-    public static final String AUTH_SCRIPT_PATH = "getAuthToken.php";
+    public static final String AUTH_SCRIPT_PATH = "auth.php";
     public static final String DATA_SCRIPT_PATH = "getData.php";
     public static final int NET_READ_TIMEOUT_MILLIS = 10000;
     public static final int NET_CONNECT_TIMEOUT_MILLIS = 15000;
+    private static final String ARG_DATA_TYPE = "data_type";
+    private static final String ARGS_LENGTH = "args_length";
+    private static final String ARG = "arg";
+    public static final String SET_COOKIE = "Set-Cookie";
     /**
      * Content resolver, for performing database operations.
      */
     private final ContentResolver mContentResolver;
+
+    private static Session mSession;
+    private static Account mAccount;
 
     /**
      * Constructor. Obtains handle to content resolver for later use.
@@ -75,6 +81,14 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         mContentResolver = context.getContentResolver();
     }
 
+    public static void setSession(Session session) {
+        mSession = session;
+    }
+
+    public static Session getSession() {
+        return mSession;
+    }
+
     @Override
     public void onPerformSync(Account account,
                               Bundle bundle,
@@ -82,14 +96,15 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
                               ContentProviderClient contentProviderClient,
                               SyncResult syncResult) {
 
-        String dataType = bundle.getString(PREF_DATA_TYPE);
+        List<String> args = new ArrayList<String>();
+        for (int i = 0; i < bundle.getInt(ARGS_LENGTH); i++)
+            args.add(bundle.getString(ARG + i));
 
         try {
-            URL location = getLocation(dataType);
+            URL location = getLocation(args);
             JSONObject data = downloadUrl(location);
-            updateLocalData(data, syncResult);
-            // Makes sure that the InputStream is closed after the app is
-            // finished using it.
+            if (data != null)
+                updateLocalData(data, syncResult);
         } catch (MalformedURLException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -103,13 +118,33 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         }
     }
 
+    public static Account getAccount() {
+        return mAccount;
+    }
+
+    public static void setAccount(Account account) {
+        mAccount = account;
+    }
+
     private void updateLocalData(JSONObject jsonObject, SyncResult syncResult)
             throws IOException, JSONException, RemoteException, OperationApplicationException {
 
         ContentResolver contentResolver = getContext().getContentResolver();
 
+        // update users
+        if (!jsonObject.isNull(User.PATH)) {
+            // parse users from JSON object
+            HashMap<String, User> users = DataParser.parseUsers(jsonObject);
+            // get notes prom database
+            Cursor c = contentResolver.query(
+                    User.URI,
+                    User.PROJECTION,
+                    null, null, null);
+            // find new items
+            updateUsers(users, c, syncResult);
+        }
         // update notes
-        if (!jsonObject.isNull(Note.PATH)) {
+        else if (!jsonObject.isNull(Note.PATH)) {
             // parse notes from JSON object
             HashMap<String, Note> notes = DataParser.parseNotes(jsonObject);
             // get notes prom database
@@ -133,14 +168,63 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         }
     }
 
+    private SyncResult updateUsers(HashMap<String, User> users, Cursor c, SyncResult syncResult)
+            throws RemoteException, OperationApplicationException {
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        while (c.moveToNext()) {
+            int id = c.getInt(User.COLUMN_ID);
+            User user = new User(c);
+            User match = users.get(Integer.toString(user.getUserId()));
+            if (match != null) {
+                users.remove(Integer.toString(user.getUserId()));
+                Uri existingUri = User.URI.buildUpon()
+                        .appendPath(Integer.toString(id)).build();
+                // if remote version is newer than local one
+                if (!match.equals(user)) {
+                    // update existing record
+                    batch.add(ContentProviderOperation.newUpdate(existingUri)
+                            .withValue(User.COLUMN_NAME_NAME, match.getName())
+                            .withValue(User.COLUMN_NAME_SURNAME, match.getSurname())
+                            .withValue(User.COLUMN_NAME_EMAIL, match.getEmail())
+                            .withValue(User.COLUMN_NAME_UNIVERSITY, match.getUniversity())
+                            .withValue(User.COLUMN_NAME_INFO, match.getInfo())
+                            .withValue(User.COLUMN_NAME_RANK, match.getRank())
+                            .build());
+                    syncResult.stats.numUpdates++;
+                }
+            }
+            syncResult.stats.numEntries++;
+        }
+        c.close();
+
+        // Add new notes
+        for (User user : users.values()) {
+            batch.add(ContentProviderOperation.newInsert(User.URI)
+                    .withValue(User.COLUMN_NAME_USER_ID, user.getUserId())
+                    .withValue(User.COLUMN_NAME_NAME, user.getName())
+                    .withValue(User.COLUMN_NAME_SURNAME, user.getSurname())
+                    .withValue(User.COLUMN_NAME_EMAIL, user.getEmail())
+                    .withValue(User.COLUMN_NAME_UNIVERSITY, user.getUniversity())
+                    .withValue(User.COLUMN_NAME_INFO, user.getInfo())
+                    .withValue(User.COLUMN_NAME_RANK, user.getRank())
+                    .build());
+            syncResult.stats.numInserts++;
+        }
+        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
+        mContentResolver.notifyChange(
+                User.URI,
+                null,
+                false);                         // IMPORTANT: Do not sync to network
+        // This sample doesn't support uploads, but if *your* code does, make sure you set
+        // syncToNetwork=false in the line above to prevent duplicate syncs.
+        return syncResult;
+    }
+
     private SyncResult updateNotes(HashMap<String, Note> notes, Cursor c, SyncResult syncResult)
             throws RemoteException, OperationApplicationException {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
         int id;
         String noteId;
-        //int userId = c.getInt(ProviderConstants.Note.COLUMN_USER_ID);
-        //int groupId = c.getInt(ProviderConstants.Note.COLUMN_GROUP_ID);
-        //int likes = c.getInt(ProviderConstants.Note.COLUMN_LIKES);
         long date;
         while (c.moveToNext()) {
             id = c.getInt(Note.COLUMN_ID);
@@ -192,27 +276,17 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
     private SyncResult updateGroups(HashMap<String, Group> groups, Cursor c, SyncResult syncResult)
             throws RemoteException, OperationApplicationException {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
-        int id;
-        String groupId, name, university, info, memberInfo;
-        boolean isPublic;
         while (c.moveToNext()) {
-            id = c.getInt(Note.COLUMN_ID);
-            groupId = Integer.toString(c.getInt(Group.COLUMN_GROUP_ID));
-            name = c.getString(Group.COLUMN_NAME);
-            university = c.getString(Group.COLUMN_UNIVERSITY);
-            info = c.getString(Group.COLUMN_INFO);
-            isPublic = c.getInt(Group.COLUMN_PUBLIC) == 1;
-            memberInfo = c.getString(Group.COLUMN_MEMBER_INFO);
+            int id = c.getInt(Note.COLUMN_ID);
+            Group group = new Group(c);
             syncResult.stats.numEntries++;
-            Group match = groups.get(groupId);
+            Group match = groups.get(Integer.toString(group.getGroupId()));
             if (match != null) {
-                groups.remove(groupId);
+                groups.remove(Integer.toString(group.getGroupId()));
                 Uri existingUri = Group.URI.buildUpon()
                         .appendPath(Integer.toString(id)).build();
                 // if remote version is newer than local one
-                if (match.getName() != name || match.getUniversity() != university ||
-                        match.getInfo() != info || match.isPublic() != isPublic ||
-                        match.getMemberInfo() != memberInfo) {
+                if (!match.equals(group)) {
                     // update existing record
                     batch.add(ContentProviderOperation.newUpdate(existingUri)
                             .withValue(Group.COLUMN_NAME_GROUP_ID, match.getGroupId())
@@ -250,71 +324,6 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         return syncResult;
     }
 
-//    public static JSONObject authenticate(String email, String password) throws IOException {
-//        URL url = new URL(SyncAdapter.SERVER_URL + SyncAdapter.AUTH_SCRIPT_PATH);
-//        JSONObject jsonObject= null;
-//        InputStream stream = null;
-//        try {
-//            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-//            conn.setReadTimeout(SyncAdapter.NET_READ_TIMEOUT_MILLIS /* milliseconds */);
-//            conn.setConnectTimeout(SyncAdapter.NET_CONNECT_TIMEOUT_MILLIS /* milliseconds */);
-//            conn.setRequestMethod("POST");
-//            conn.setDoInput(true);
-//            conn.setDoOutput(true);
-//            DataOutputStream os = new DataOutputStream (conn.getOutputStream ());
-//            os.writeBytes ("email=" + URLEncoder.encode(email, "UTF-8") +
-//                    "&password=" + URLEncoder.encode(password, "UTF-8"));
-//            os.flush ();
-//            os.close ();
-//            stream = conn.getInputStream();
-//            String resultString = streamToString(stream);
-//            jsonObject = new JSONObject(resultString);
-//        } catch (JSONException e) {
-//            e.printStackTrace();
-//        } finally {
-//            if (stream != null)
-//                stream.close();
-//        }
-//        return jsonObject;
-//    }
-
-    /**
-     * Create an entry for this application in the system account list, if it isn't already there.
-     *
-     * @param context Context
-     */
-    @TargetApi(Build.VERSION_CODES.FROYO)
-    public static void createSyncAccount(Context context) {
-        boolean newAccount = false;
-        boolean setupComplete = PreferenceManager
-                .getDefaultSharedPreferences(context).getBoolean(PREF_SETUP_COMPLETE, false);
-
-        Account account = AccountService.getAccount();
-        AccountManager accountManager =
-                (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
-        if (accountManager.addAccountExplicitly(account, null, null)) {
-            // Inform the system that this account supports sync
-            ContentResolver.setIsSyncable(account, Provider.AUTHORITY, 1);
-            // Inform the system that this account is eligible for auto sync when the network is up
-            ContentResolver.setSyncAutomatically(account, Provider.AUTHORITY, true);
-            // Recommend a schedule for automatic synchronization. The system may modify this based
-            // on other scheduled syncs and network utilization.
-            ContentResolver.addPeriodicSync(
-                    account, Provider.AUTHORITY, new Bundle(),SYNC_FREQUENCY);
-            newAccount = true;
-        }
-
-        // Schedule an initial sync if we detect problems with either our account or our local
-        // data has been deleted. (Note that it's possible to clear app data WITHOUT affecting
-        // the account list, so wee need to check both.)
-        if (newAccount || !setupComplete) {
-            //triggerRefresh(Note.TABLE_NAME);
-            triggerRefresh(Group.TABLE_NAME);
-            PreferenceManager.getDefaultSharedPreferences(context).edit()
-                    .putBoolean(PREF_SETUP_COMPLETE, true).commit();
-        }
-    }
-
     /**
      * Helper method to trigger an immediate sync ("refresh").
      *
@@ -326,49 +335,54 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
      * but the user is not actively waiting for that data, you should omit this flag; this will give
      * the OS additional freedom in scheduling your sync request.
      */
-    public static void triggerRefresh(String dataType) {
+    public static void triggerRefresh(ArrayList<Argument> args) {
         Bundle b = new Bundle();
         // Disable sync backoff and ignore sync preferences. In other words...perform sync NOW!
         b.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
         b.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
-        b.putString(PREF_DATA_TYPE, dataType);
-        ContentResolver.requestSync(
-                AccountService.getAccount(),
-                Provider.AUTHORITY,
-                b);
+        b.putInt(ARGS_LENGTH, args.size());
+        for (int i = 0; i < args.size(); i++)
+            b.putString(ARG + i, args.get(i).toString());
+        ContentResolver.requestSync(mAccount, Provider.AUTHORITY, b);
     }
 
-    public URL getLocation(String dataType) throws MalformedURLException {
-        return new URL(SyncAdapter.SERVER_URL + SyncAdapter.DATA_SCRIPT_PATH + "?" +
-                PREF_DATA_TYPE + "=" + dataType);
+    public URL getLocation(List<String> args)
+            throws MalformedURLException, UnsupportedEncodingException {
+        String urlString = SyncAdapter.SERVER_URL + SyncAdapter.DATA_SCRIPT_PATH + "?";
+        for (String arg : args) {
+            String[] parts = arg.split("=");
+            urlString += parts[0] + "=" + URLEncoder.encode(parts[1], "UTF-8") + "&";
+        }
+        return  new URL(urlString);
     }
 
     public JSONObject downloadUrl(URL url) throws IOException {
-        JSONObject jsonObject= null;
+        HttpURLConnection conn = null;
         InputStream stream = null;
+        JSONObject jsonObject= null;
         try {
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(SyncAdapter.NET_READ_TIMEOUT_MILLIS /* milliseconds */);
-            conn.setConnectTimeout(SyncAdapter.NET_CONNECT_TIMEOUT_MILLIS /* milliseconds */);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(SyncAdapter.NET_READ_TIMEOUT_MILLIS);
+            conn.setConnectTimeout(SyncAdapter.NET_CONNECT_TIMEOUT_MILLIS);
             conn.setRequestMethod("GET");
+            conn.setRequestProperty(SET_COOKIE,
+                    "PHPSESSID=" + mSession.getAuthToken() + "; path=/");
             conn.setDoInput(true);
-            conn.connect();
             stream = conn.getInputStream();
             String resultString = streamToString(stream);
-            if (resultString.startsWith("<?xml"))
-                jsonObject = XML.toJSONObject(resultString);
-            else
-                jsonObject = new JSONObject(resultString);
+            jsonObject = new JSONObject(resultString);
         } catch (JSONException e) {
             e.printStackTrace();
         } finally {
             if (stream != null)
                 stream.close();
+            if (conn != null)
+                conn.disconnect();
         }
         return jsonObject;
     }
 
-    private String streamToString(InputStream inputStream) throws IOException {
+    public static String streamToString(InputStream inputStream) throws IOException {
         String line;
         StringBuilder str = new StringBuilder();
         BufferedReader rd = new BufferedReader(new InputStreamReader(inputStream));
@@ -376,5 +390,19 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
             str.append(line);
         }
         return str.toString();
+    }
+
+    public static void syncCurrentUser() {
+        ArrayList<Argument> args = new ArrayList<Argument>();
+        args.add(new Argument(ARG_DATA_TYPE, User.TABLE_NAME));
+        args.add(new Argument(User.COLUMN_NAME_USER_ID, Integer.toString(mSession.getUserId())));
+        triggerRefresh(args);
+    }
+
+    public static void syncUserGroups() {
+//        ArrayList<Argument> args = new ArrayList<Argument>();
+//        args.add(new Argument(ARG_DATA_TYPE, Group.TABLE_NAME));
+//        args.add(new Argument(Group., AccountService.getSession().getUser().getUserId()));
+//        triggerRefresh(args);
     }
 }

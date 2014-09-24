@@ -2,7 +2,17 @@
 <resources>
 
     <string name="app_name">UniversitySync</string>
-    <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
+    <string name="email">E-mail</string>
+    <string name="password">Password</string>
+    <string name="sign_in">Sign In</string>
+    <string name="cancel">Cancel</string>
+    <string name="authenticating">Authentication</string>
+    <string name="login">Sign In</string>
+    <string name="error_password_required">Password required</string>
+    <string name="error_invalid_password">Invalid password</string>
+    <string name="error_email_required">Email required</string>
+    <string name="error_invalid_email">Invalid email</string>
+    <string name="refresh">Refresh</string>
 
 </resources>

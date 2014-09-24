@@ -8,6 +8,7 @@ import java.util.HashMap;
 
 import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
+import sk.mikme.universitysync.provider.User;
 
 /**
  * Created by fic on 18.9.2014.
@@ -35,5 +36,15 @@ public class DataParser {
             groups.put(Integer.toString(group.getGroupId()), group);
         }
         return groups;
+    }
+
+    public static HashMap<String,User> parseUsers(JSONObject jsonObject) throws JSONException {
+        JSONArray userArray = jsonObject.getJSONArray(User.PATH);
+        HashMap<String, User> users = new HashMap<String, User>();
+        for (int i = 0; i < userArray.length(); i++) {
+            User user = new User(userArray.getJSONObject(i));
+            users.put(Integer.toString(user.getUserId()), user);
+        }
+        return users;
     }
 }

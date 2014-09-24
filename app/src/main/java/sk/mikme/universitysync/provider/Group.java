@@ -1,6 +1,7 @@
 package sk.mikme.universitysync.provider;
 
 import android.content.ContentResolver;
+import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
 
@@ -74,6 +75,28 @@ public class Group implements BaseColumns {
         this.mInfo = object.getString("info");
         this.mIsPublic = object.getBoolean("public");
         this.mMemberInfo = object.getString("member_info");
+    }
+
+    public Group(Cursor c) {
+        mGroupId = c.getInt(COLUMN_GROUP_ID);
+        mName = c.getString(COLUMN_NAME);
+        mUniversity = c.getString(COLUMN_UNIVERSITY);
+        mInfo = c.getString(COLUMN_INFO);
+        mIsPublic = c.getInt(COLUMN_PUBLIC) == 1;
+        mMemberInfo = c.getString(COLUMN_MEMBER_INFO);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof Group) {
+            Group group = (Group) o;
+            return (getName().equals(group.getName()) ||
+                    getUniversity().equals(group.getUniversity()) ||
+                    getInfo().equals(group.getInfo()) ||
+                    isPublic() == group.isPublic() ||
+                    getMemberInfo().equals(group.getMemberInfo()));
+        }
+        return false;
     }
 
     public int getGroupId() {

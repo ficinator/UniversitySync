@@ -1,19 +1,21 @@
-<?xml version="1.0" encoding="UTF-8"?>
-
-<!--<fragment xmlns:android="http://schemas.android.com/apk/res/android"-->
-    <!--xmlns:tools="http://schemas.android.com/tools"-->
-    <!--class="sk.mikme.universitysync.fragments.NoteListFragment"-->
-    <!--android:id="@+id/note_list"-->
-    <!--android:layout_width="match_parent"-->
-    <!--android:layout_height="match_parent"-->
-    <!--tools:context=".NoteListFragment"-->
-    <!--tools:layout="@android:layout/list_content" />-->
-
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    class="sk.mikme.universitysync.fragments.GroupListFragment"
-    android:id="@+id/group_list"
+<android.support.v4.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    tools:context=".GroupListFragment"
-    tools:layout="@android:layout/list_content" />
+    android:layout_height="match_parent">
+
+    <!-- The main content view -->
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- The navigation drawer -->
+    <ListView android:id="@+id/left_drawer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:choiceMode="singleChoice"
+        android:background="@android:color/black"/>
+
+</android.support.v4.widget.DrawerLayout>

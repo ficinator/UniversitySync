@@ -15,6 +15,7 @@ import android.view.View;
 
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.provider.Group;
+import sk.mikme.universitysync.provider.Note;
 import sk.mikme.universitysync.sync.SyncAdapter;
 
 /**
@@ -58,7 +59,7 @@ public class GroupListFragment extends ListFragment
     public void onAttach(Activity activity) {
         super.onAttach(activity);
 
-        SyncAdapter.createSyncAccount(activity);
+        //SyncAdapter.triggerRefresh(Note.TABLE_NAME);
     }
 
     @Override
@@ -96,7 +97,6 @@ public class GroupListFragment extends ListFragment
                 null,
                 null,
                 Group.COLUMN_NAME_NAME + " asc");
-
     }
 
     @Override
@@ -127,7 +127,7 @@ public class GroupListFragment extends ListFragment
         switch (item.getItemId()) {
             // If the user clicks the "Refresh" button.
             case R.id.menu_sync:
-                SyncAdapter.triggerRefresh(Group.TABLE_NAME);
+                //SyncAdapter.triggerRefresh(Group.TABLE_NAME);
                 return true;
         }
         return super.onOptionsItemSelected(item);

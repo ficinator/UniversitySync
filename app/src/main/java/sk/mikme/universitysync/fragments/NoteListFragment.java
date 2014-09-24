@@ -57,7 +57,7 @@ public class NoteListFragment extends ListFragment
     public void onAttach(Activity activity) {
         super.onAttach(activity);
 
-        SyncAdapter.createSyncAccount(activity);
+        //SyncAdapter.createSyncAccount(activity);
     }
 
     @Override
@@ -144,7 +144,7 @@ public class NoteListFragment extends ListFragment
         switch (item.getItemId()) {
             // If the user clicks the "Refresh" button.
             case R.id.menu_sync:
-                SyncAdapter.triggerRefresh(Note.TABLE_NAME);
+                //SyncAdapter.triggerRefresh(Note.TABLE_NAME);
                 return true;
         }
         return super.onOptionsItemSelected(item);

@@ -6,34 +6,25 @@ import android.accounts.AccountAuthenticatorResponse;
 import android.accounts.AccountManager;
 import android.accounts.NetworkErrorException;
 import android.app.Service;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Parcelable;
+
+import sk.mikme.universitysync.activities.LoginActivity;
+import sk.mikme.universitysync.provider.Provider;
+import sk.mikme.universitysync.provider.User;
+
 
 public class AccountService extends Service {
     private static final String TAG = "AccountService";
-    public static final String ACCOUNT_NAME = "Account";
     public static final String ACCOUNT_TYPE = "sk.mikme.universitysync.account";
     public static final String AUTHTOKEN_TYPE = ACCOUNT_TYPE;
     private static final Object sAccountServiceLock = new Object();
 
     private Authenticator mAuthenticator;
-
-    /**
-     * Obtain a handle to the {@link android.accounts.Account} used for sync in this application.
-     *
-     * <p>It is important that the accountType specified here matches the value in your sync adapter
-     * configuration XML file for android.accounts.AccountAuthenticator (often saved in
-     * res/xml/syncadapter.xml). If this is not set correctly, you'll receive an error indicating
-     * that "caller uid XXXXX is different than the authenticator's uid".
-     *
-     * @return Handle to application's account (not guaranteed to resolve unless CreateSyncAccount()
-     *         has been called)
-     */
-    public static Account getAccount() {
-        return new Account(ACCOUNT_NAME, ACCOUNT_TYPE);
-    }
 
     @Override
     public void onCreate() {
@@ -47,6 +38,68 @@ public class AccountService extends Service {
     public IBinder onBind(Intent intent) {
         return mAuthenticator.getIBinder();
     }
+
+    public static Account findAccountBySession(Context context, Session session) {
+        AccountManager manager = AccountManager.get(context);
+        if (session != null) {
+            Account[] accounts = manager.getAccountsByType(ACCOUNT_TYPE);
+            Account account = null;
+            for (Account a : accounts) {
+                if (a.name.equals(session.getUserEmail())) {
+                    account = a;
+                    break;
+                }
+            }
+            if (account != null) {
+                //manager.setAuthToken(account, AccountService.AUTHTOKEN_TYPE, user.getAuthToken());
+                //mUser = user;
+                //SyncAdapter.setAccount(account);
+                return account;
+            }
+        }
+        return null;
+    }
+
+    public static void addAccount(Context context,
+                                  String username,
+                                  String password,
+                                  Parcelable response) {
+        AccountAuthenticatorResponse authResponse = (AccountAuthenticatorResponse)response;
+        Bundle result = addAccount(context, username, password);
+        if(authResponse != null)
+            authResponse.onResult(result);
+    }
+
+    private static Bundle addAccount(Context context,
+                             String username,
+                             String password) {
+        Bundle result = null;
+        Account account = new Account(username, ACCOUNT_TYPE);
+        AccountManager am = AccountManager.get(context);
+        if (am.addAccountExplicitly(account, password, null)) {
+            // Inform the system that this account supports sync
+            ContentResolver.setIsSyncable(account, Provider.AUTHORITY, 1);
+            // Inform the system that this account is eligible for auto sync when the network is up
+            ContentResolver.setSyncAutomatically(account, Provider.AUTHORITY, true);
+            // Recommend a schedule for automatic synchronization. The system may modify this based
+            // on other scheduled syncs and network utilization.
+            ContentResolver.addPeriodicSync(
+                    account, Provider.AUTHORITY, new Bundle(), SyncAdapter.SYNC_FREQUENCY);
+            result = new Bundle();
+            result.putString(AccountManager.KEY_ACCOUNT_NAME, account.name);
+            result.putString(AccountManager.KEY_ACCOUNT_TYPE, account.type);
+        }
+        return result;
+    }
+
+//    public static boolean hasAccount(Context context) {
+//        AccountManager manager = AccountManager.get(context);
+//        Account[] accounts = manager.getAccountsByType(ACCOUNT_TYPE);
+//        if (accounts != null && accounts.length > 0)
+//            return true;
+//        else
+//            return false;
+//    }
 
     private class Authenticator extends AbstractAccountAuthenticator {
 
@@ -68,13 +121,11 @@ public class AccountService extends Service {
                                  String authTokenType,
                                  String[] requiredFeatures,
                                  Bundle options) throws NetworkErrorException {
-//            Intent intent = new Intent(mContext, LoginActivity.class);
-//            intent.putExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response);
-//            Bundle bundle = new Bundle();
-//            bundle.putParcelable(AccountManager.KEY_INTENT, intent);
-//            return bundle;
-            // call the logindialogfragment to get users credentials
-            return null;
+            Intent intent = new Intent(mContext, LoginActivity.class);
+            intent.putExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response);
+            Bundle bundle = new Bundle();
+            bundle.putParcelable(AccountManager.KEY_INTENT, intent);
+            return bundle;
         }
 
         @Override
