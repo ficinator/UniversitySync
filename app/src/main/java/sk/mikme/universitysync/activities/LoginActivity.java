@@ -133,29 +133,17 @@ public class LoginActivity extends AccountAuthenticatorActivity
     public void onAccountAuth(User user) {
         if (user != null) {
             // put the user into the db
-            ContentResolver resolver = getApplicationContext().getContentResolver();
-            ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
-            batch.add(ContentProviderOperation.newInsert(User.URI)
-                    .withValue(User.COLUMN_NAME_USER_ID, user.getUserId())
-                    .withValue(User.COLUMN_NAME_NAME, user.getName())
-                    .withValue(User.COLUMN_NAME_SURNAME, user.getSurname())
-                    .withValue(User.COLUMN_NAME_EMAIL, user.getEmail())
-                    .withValue(User.COLUMN_NAME_UNIVERSITY, user.getUniversity())
-                    .withValue(User.COLUMN_NAME_INFO, user.getInfo())
-                    .withValue(User.COLUMN_NAME_RANK, user.getRank())
-                    .build());
             try {
-                resolver.applyBatch(Provider.AUTHORITY, batch);
+                Provider.insertOrUpdate(getApplicationContext(), user);
             } catch (RemoteException e) {
+                //TODO:
                 e.printStackTrace();
-                setResult(RESULT_CANCELED);
-                finish();
+                return;
             } catch (OperationApplicationException e) {
+                //TODO:
                 e.printStackTrace();
-                setResult(RESULT_CANCELED);
-                finish();
+                return;
             }
-            resolver.notifyChange(User.URI,  null, false);
 
             // set extras for account service
             Parcelable authResponse = null;

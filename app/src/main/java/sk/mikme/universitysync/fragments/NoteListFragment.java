@@ -2,7 +2,10 @@ package sk.mikme.universitysync.fragments;
 
 import android.app.Activity;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Parcelable;
+import android.provider.BaseColumns;
 import android.support.v4.app.ListFragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
@@ -16,7 +19,9 @@ import android.view.View;
 import android.widget.TextView;
 
 import sk.mikme.universitysync.R;
+import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
+import sk.mikme.universitysync.provider.User;
 import sk.mikme.universitysync.sync.SyncAdapter;
 
 public class NoteListFragment extends ListFragment
@@ -34,30 +39,24 @@ public class NoteListFragment extends ListFragment
     private static final int[] TO_FIELDS = new int[]{
             R.id.title,
             R.id.date};
+    private static final String SELECTION = "selection";
 
     private SimpleCursorAdapter mAdapter;
     private Menu mOptionsMenu;
-
-    // TODO: Rename and change types of parameters
-    public static NoteListFragment newInstance(String param1, String param2) {
-        NoteListFragment fragment = new NoteListFragment();
-        Bundle args = new Bundle();
-        fragment.setArguments(args);
-        return fragment;
-    }
+    private Parcelable mSelectionArgs;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
      * fragment (e.g. upon screen orientation changes).
      */
-    public NoteListFragment() {
-    }
+    public NoteListFragment() { }
 
     @Override
     public void onAttach(Activity activity) {
         super.onAttach(activity);
 
-        //SyncAdapter.createSyncAccount(activity);
+        if (mSelectionArgs != null)
+            getLoaderManager().initLoader(0, null, this);
     }
 
     @Override
@@ -97,7 +96,6 @@ public class NoteListFragment extends ListFragment
         });
         setListAdapter(mAdapter);
         //setEmptyText();
-        getLoaderManager().initLoader(0, null, this);
     }
 
     @Override
@@ -107,13 +105,22 @@ public class NoteListFragment extends ListFragment
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
+        Uri uri = Note.URI;
+        if (mSelectionArgs instanceof User) {
+            uri = uri.buildUpon()
+                    .appendPath(User.PATH)
+                    .appendPath(Integer.toString(((User) mSelectionArgs).getUserId()))
+                    .build();
+        }
+        else if (mSelectionArgs instanceof Group) {
+            //TODO:
+        }
         return new CursorLoader(getActivity(),
-                Note.URI,
+                uri,
                 Note.PROJECTION,
                 null,
                 null,
                 Note.COLUMN_NAME_DATE + " desc");
-
     }
 
     @Override
@@ -144,9 +151,16 @@ public class NoteListFragment extends ListFragment
         switch (item.getItemId()) {
             // If the user clicks the "Refresh" button.
             case R.id.menu_sync:
-                //SyncAdapter.triggerRefresh(Note.TABLE_NAME);
+                SyncAdapter.syncCurrentUserData();
                 return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void setSelectionArgs(Parcelable selectionArgs) {
+        mSelectionArgs = selectionArgs;
+
+        if (isAdded())
+            getLoaderManager().initLoader(0, null, this);
     }
 }

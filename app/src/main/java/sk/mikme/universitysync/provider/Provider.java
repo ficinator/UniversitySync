@@ -1,15 +1,20 @@
 package sk.mikme.universitysync.provider;
 
 import android.content.ContentProvider;
+import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
+import android.os.RemoteException;
 import android.provider.BaseColumns;
+
+import java.util.ArrayList;
 
 /**
  * Created by fic on 17.9.2014.
@@ -33,34 +38,42 @@ public class Provider extends ContentProvider {
      * URI ID for route: /notes
      */
     public static final int ROUTE_NOTES = 1;
-
     /**
      * URI ID for route: /notes/{ID}
      */
     public static final int ROUTE_NOTES_ID = 2;
     /**
+     * URI ID for route: /notes/users/{ID}
+     */
+    public static final int ROUTE_NOTES_USERS_ID = 3;
+    /**
+     * URI ID for route: /notes/groups/{ID}
+     */
+    public static final int ROUTE_NOTES_GROUPS_ID = 4;
+    /**
      * URI ID for route: /groups
      */
-    public static final int ROUTE_GROUPS = 3;
-
+    public static final int ROUTE_GROUPS = 5;
     /**
      * URI ID for route: /groups/{ID}
      */
-    public static final int ROUTE_GROUPS_ID = 4;
+    public static final int ROUTE_GROUPS_ID = 6;
+    /**
+     * URI ID for route: /groups/users/{ID}
+     */
+    public static final int ROUTE_GROUPS_USERS_ID = 7;
     /**
      * URI ID for route: /users
      */
-    public static final int ROUTE_USERS = 5;
-
+    public static final int ROUTE_USERS = 8;
     /**
      * URI ID for route: /users/{ID}
      */
-    public static final int ROUTE_USERS_ID = 6;
-
+    public static final int ROUTE_USERS_ID = 9;
     /**
-     * URI ID for route: /users/{email}
+     * URI ID for route: /users/{ID}
      */
-    public static final int ROUTE_USERS_EMAIL = 7;
+    public static final int ROUTE_USERS_GROUPS_ID = 10;
 
     /**
      * UriMatcher, used to decode incoming URIs.
@@ -68,12 +81,13 @@ public class Provider extends ContentProvider {
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
     static {
         sUriMatcher.addURI(AUTHORITY, "notes", ROUTE_NOTES);
-        sUriMatcher.addURI(AUTHORITY, "notes/*", ROUTE_NOTES_ID);
+        sUriMatcher.addURI(AUTHORITY, "notes/#", ROUTE_NOTES_ID);
+        sUriMatcher.addURI(AUTHORITY, "notes/users/#", ROUTE_NOTES_USERS_ID);
         sUriMatcher.addURI(AUTHORITY, "groups", ROUTE_GROUPS);
-        sUriMatcher.addURI(AUTHORITY, "groups/*", ROUTE_GROUPS_ID);
+        sUriMatcher.addURI(AUTHORITY, "groups/#", ROUTE_GROUPS_ID);
+        sUriMatcher.addURI(AUTHORITY, "groups/users/#", ROUTE_GROUPS_USERS_ID);
         sUriMatcher.addURI(AUTHORITY, "users", ROUTE_USERS);
-        sUriMatcher.addURI(AUTHORITY, "users/*", ROUTE_USERS_ID);
-        //sUriMatcher.addURI(AUTHORITY, "users/*", ROUTE_USERS_EMAIL);
+        sUriMatcher.addURI(AUTHORITY, "users/#", ROUTE_USERS_ID);
     }
 
     @Override
@@ -93,49 +107,60 @@ public class Provider extends ContentProvider {
         String id = uri.getLastPathSegment();
         Cursor c;
         Context ctx = getContext();
+
+        // queried table
         switch (sUriMatcher.match(uri)) {
-            case ROUTE_NOTES_ID:
-                // Return a single note, by ID.
-                builder.where(Note._ID + "=?", id);
             case ROUTE_NOTES:
-                // Return all known entries.
-                builder.table(Note.TABLE_NAME)
-                        .where(selection, selectionArgs);
-                c = builder.query(db, projection, sortOrder);
-                // Note: Notification URI must be manually set here for loaders to correctly
-                // register ContentObservers.
-                assert ctx != null;
-                c.setNotificationUri(ctx.getContentResolver(), uri);
-                return c;
-            case ROUTE_GROUPS_ID:
-                // Return a single note, by ID.
-                builder.where(Group._ID + "=?", id);
+            case ROUTE_NOTES_ID:
+            case ROUTE_NOTES_USERS_ID:
+            case ROUTE_NOTES_GROUPS_ID:
+                builder.table(Note.TABLE_NAME);
+                break;
             case ROUTE_GROUPS:
-                // Return all known entries.
-                builder.table(Group.TABLE_NAME)
-                        .where(selection, selectionArgs);
-                c = builder.query(db, projection, sortOrder);
-                // Note: Notification URI must be manually set here for loaders to correctly
-                // register ContentObservers.
-                assert ctx != null;
-                c.setNotificationUri(ctx.getContentResolver(), uri);
-                return c;
-            case ROUTE_USERS_ID:
-                // Return a single note, by ID.
-                builder.where(User.COLUMN_NAME_USER_ID + "=?", id);
+            case ROUTE_GROUPS_ID:
+                builder.table(Group.TABLE_NAME);
+                break;
+            case ROUTE_GROUPS_USERS_ID:
+                builder.table(Member.TABLE_NAME + " JOIN " + Group.TABLE_NAME+ " ON "
+                        + Member.TABLE_NAME + "." + Member.COLUMN_NAME_GROUP_ID + "="
+                        + Group.TABLE_NAME + "." + Group.COLUMN_NAME_GROUP_ID);
+                break;
             case ROUTE_USERS:
-                // Return all known entries.
-                builder.table(User.TABLE_NAME)
-                        .where(selection, selectionArgs);
-                c = builder.query(db, projection, sortOrder);
-                // Note: Notification URI must be manually set here for loaders to correctly
-                // register ContentObservers.
-                assert ctx != null;
-                c.setNotificationUri(ctx.getContentResolver(), uri);
-                return c;
+            case ROUTE_USERS_ID:
+            case ROUTE_USERS_GROUPS_ID:
+                builder.table(User.TABLE_NAME);
+                break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
+
+        switch (sUriMatcher.match(uri)) {
+            case ROUTE_NOTES_ID:
+                builder.where(Note.COLUMN_NAME_NOTE_ID + "=?", id);
+                break;
+            case ROUTE_NOTES_USERS_ID:
+                builder.where(Note.COLUMN_NAME_USER_ID + "=?", id);
+                break;
+            case ROUTE_GROUPS_ID:
+                builder.where(Group._ID + "=?", id);
+                break;
+            case ROUTE_GROUPS_USERS_ID:
+                builder.where(Member.COLUMN_NAME_USER_ID + "=?", id)
+                        .mapToTable(Group._ID, Group.TABLE_NAME)
+                        .mapToTable(Group.COLUMN_NAME_GROUP_ID, Group.TABLE_NAME);
+                break;
+            case ROUTE_USERS_ID:
+                builder.where(User.COLUMN_NAME_USER_ID + "=?", id);
+                break;
+        }
+
+        builder.where(selection, selectionArgs);
+        c = builder.query(db, projection, sortOrder);
+        // Note: Notification URI must be manually set here for loaders to correctly
+        // register ContentObservers.
+        assert ctx != null;
+        c.setNotificationUri(ctx.getContentResolver(), uri);
+        return c;
     }
 
     @Override
@@ -183,8 +208,6 @@ public class Provider extends ContentProvider {
                 result = Uri.parse(User.URI + "/" + id);
                 break;
             case ROUTE_USERS_ID:
-                throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
-            case ROUTE_USERS_EMAIL:
                 throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
@@ -236,12 +259,6 @@ public class Provider extends ContentProvider {
             case ROUTE_USERS_ID:
                 count = builder.table(User.TABLE_NAME)
                         .where(User._ID + "=?", id)
-                        .where(selection, selectionArgs)
-                        .delete(db);
-                break;
-            case ROUTE_USERS_EMAIL:
-                count = builder.table(User.TABLE_NAME)
-                        .where(User.COLUMN_NAME_EMAIL + "=?", id)
                         .where(selection, selectionArgs)
                         .delete(db);
                 break;
@@ -299,12 +316,6 @@ public class Provider extends ContentProvider {
                         .where(selection, selectionArgs)
                         .update(db, values);
                 break;
-            case ROUTE_USERS_EMAIL:
-                count = builder.table(User.TABLE_NAME)
-                        .where(User.COLUMN_NAME_EMAIL + "=?", id)
-                        .where(selection, selectionArgs)
-                        .update(db, values);
-                break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -312,6 +323,40 @@ public class Provider extends ContentProvider {
         assert ctx != null;
         ctx.getContentResolver().notifyChange(uri, null, false);
         return count;
+    }
+
+    public static void insertOrUpdate(Context context, User user)
+            throws RemoteException, OperationApplicationException {
+        ContentResolver resolver = context.getContentResolver();
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        Uri uri = User.URI.buildUpon().appendPath(Integer.toString(user.getUserId())).build();
+        Cursor c = resolver.query(uri, User.PROJECTION, null, null, null);
+        if (c.moveToFirst()) {
+            User match = new User(c);
+            if (!match.equals(user)) {
+                batch.add(ContentProviderOperation.newUpdate(uri)
+                        .withValue(User.COLUMN_NAME_NAME, user.getName())
+                        .withValue(User.COLUMN_NAME_SURNAME, user.getSurname())
+                        .withValue(User.COLUMN_NAME_EMAIL, user.getEmail())
+                        .withValue(User.COLUMN_NAME_UNIVERSITY, user.getUniversity())
+                        .withValue(User.COLUMN_NAME_INFO, user.getInfo())
+                        .withValue(User.COLUMN_NAME_RANK, user.getRank())
+                        .build());
+            }
+        }
+        else {
+            batch.add(ContentProviderOperation.newInsert(User.URI)
+                    .withValue(User.COLUMN_NAME_USER_ID, user.getUserId())
+                    .withValue(User.COLUMN_NAME_NAME, user.getName())
+                    .withValue(User.COLUMN_NAME_SURNAME, user.getSurname())
+                    .withValue(User.COLUMN_NAME_EMAIL, user.getEmail())
+                    .withValue(User.COLUMN_NAME_UNIVERSITY, user.getUniversity())
+                    .withValue(User.COLUMN_NAME_INFO, user.getInfo())
+                    .withValue(User.COLUMN_NAME_RANK, user.getRank())
+                    .build());
+        }
+        resolver.applyBatch(Provider.AUTHORITY, batch);
+        resolver.notifyChange(User.URI,  null, false);
     }
 
     /**

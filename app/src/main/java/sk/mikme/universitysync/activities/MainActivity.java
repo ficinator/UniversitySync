@@ -7,6 +7,9 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.support.v4.app.ActionBarDrawerToggle;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
@@ -24,6 +27,8 @@ import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.adapters.DrawerListAdapter;
 import sk.mikme.universitysync.drawer.DrawerItem;
 import sk.mikme.universitysync.drawer.DrawerUserItem;
+import sk.mikme.universitysync.fragments.HomeFragment;
+import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.User;
 import sk.mikme.universitysync.sync.AccountService;
 import sk.mikme.universitysync.sync.Session;
@@ -54,12 +59,14 @@ public class MainActivity extends ActionBarActivity
         if (account != null) {
             SyncAdapter.setSession(session);
             SyncAdapter.setAccount(account);
-            showCurrentUser();
+            showCurrentUserData();
         }
         else {
             Intent intent = new Intent(getApplicationContext(), LoginActivity.class);
             startActivityForResult(intent, REQEST_LOGIN);
         }
+
+        showHomeFragment();
     }
 
     @Override
@@ -67,13 +74,9 @@ public class MainActivity extends ActionBarActivity
         super.onResume();
     }
 
-    private void showCurrentUser() {
-        SyncAdapter.syncCurrentUser();
+    private void showCurrentUserData() {
+        SyncAdapter.syncCurrentUserData();
         getSupportLoaderManager().initLoader(LOADER_USER, null, this);
-    }
-
-    private void showUserGroups() {
-        SyncAdapter.syncUserGroups();
         getSupportLoaderManager().initLoader(LOADER_GROUPS, null, this);
     }
 
@@ -121,14 +124,16 @@ public class MainActivity extends ActionBarActivity
     public boolean onPrepareOptionsMenu(Menu menu) {
         // If the nav drawer is open, hide action items related to the content view
         boolean drawerOpen = mDrawerLayout.isDrawerOpen(mDrawerList);
-        menu.findItem(R.id.menu_sync).setVisible(!drawerOpen);
+        MenuItem syncItem = menu.findItem(R.id.menu_sync);
+        if (syncItem != null)
+            syncItem.setVisible(!drawerOpen);
         return super.onPrepareOptionsMenu(menu);
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main, menu);
+        //getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
 
@@ -178,11 +183,13 @@ public class MainActivity extends ActionBarActivity
                 return new CursorLoader(this,
                         User.URI.buildUpon()
                                 .appendPath(Integer.toString(SyncAdapter.getSession().getUserId()))
-                                .build(),
-                        User.PROJECTION,
-                        null,
-                        null,
-                        null);
+                                .build(), User.PROJECTION, null, null, null);
+            case LOADER_GROUPS:
+                return new CursorLoader(this,
+                        Group.URI.buildUpon()
+                                .appendPath(User.PATH)
+                                .appendPath(Integer.toString(SyncAdapter.getSession().getUserId()))
+                                .build(), Group.PROJECTION, null, null, null);
             default:
                 return null;
         }
@@ -192,17 +199,36 @@ public class MainActivity extends ActionBarActivity
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
         switch (cursorLoader.getId()) {
             case LOADER_USER:
-                while (cursor.moveToNext()) {
-                    mDrawerItems.add(new DrawerUserItem(new User(cursor)));
+                if (cursor.moveToFirst()) {
+                    User user = new User(cursor);
+                    mDrawerItems.add(new DrawerUserItem(user));
+                    FragmentManager fm = getSupportFragmentManager();
+                    HomeFragment homeFragment = (HomeFragment) fm.findFragmentById(R.id.content);
+                    homeFragment.setUser(user);
                 }
+                getSupportLoaderManager().destroyLoader(LOADER_USER);
+                break;
+            case LOADER_GROUPS:
+                while (cursor.moveToNext()) {
+                    Group group = new Group(cursor);
+                }
+                getSupportLoaderManager().destroyLoader(LOADER_GROUPS);
         }
         ((DrawerListAdapter) mDrawerList.getAdapter()).notifyDataSetChanged();
-        getSupportLoaderManager().destroyLoader(LOADER_USER);
     }
 
     @Override
     public void onLoaderReset(Loader<Cursor> cursorLoader) {
         mDrawerItems.clear();
         ((DrawerListAdapter) mDrawerList.getAdapter()).notifyDataSetChanged();
+    }
+
+    private void showHomeFragment() {
+        FragmentManager fm = getSupportFragmentManager();
+        FragmentTransaction transaction = fm.beginTransaction();
+        Fragment fragment = fm.findFragmentById(R.id.content);
+        if (fragment == null)
+            fragment = new HomeFragment();
+        transaction.replace(R.id.content, fragment).commit();
     }
 }

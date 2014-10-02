@@ -223,17 +223,16 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
     private SyncResult updateNotes(HashMap<String, Note> notes, Cursor c, SyncResult syncResult)
             throws RemoteException, OperationApplicationException {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
-        int id;
-        String noteId;
+        int id, noteId;
         long date;
         while (c.moveToNext()) {
             id = c.getInt(Note.COLUMN_ID);
-            noteId = Integer.toString(c.getInt(Note.COLUMN_NOTE_ID));
+            noteId = c.getInt(Note.COLUMN_NOTE_ID);
             date = c.getLong(Note.COLUMN_DATE);
             syncResult.stats.numEntries++;
-            Note match = notes.get(noteId);
+            Note match = notes.get(Integer.toString(noteId));
             if (match != null) {
-                notes.remove(noteId);
+                notes.remove(Integer.toString(noteId));
                 Uri existingUri = Note.URI.buildUpon()
                         .appendPath(Integer.toString(id)).build();
                 // if remote version is newer than local one
@@ -392,17 +391,16 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         return str.toString();
     }
 
-    public static void syncCurrentUser() {
+    public static void syncCurrentUserData() {
         ArrayList<Argument> args = new ArrayList<Argument>();
-        args.add(new Argument(ARG_DATA_TYPE, User.TABLE_NAME));
         args.add(new Argument(User.COLUMN_NAME_USER_ID, Integer.toString(mSession.getUserId())));
+        args.add(new Argument(ARG_DATA_TYPE, User.TABLE_NAME));
         triggerRefresh(args);
-    }
 
-    public static void syncUserGroups() {
-//        ArrayList<Argument> args = new ArrayList<Argument>();
-//        args.add(new Argument(ARG_DATA_TYPE, Group.TABLE_NAME));
-//        args.add(new Argument(Group., AccountService.getSession().getUser().getUserId()));
-//        triggerRefresh(args);
+        args.set(1, new Argument(ARG_DATA_TYPE, Group.TABLE_NAME));
+        triggerRefresh(args);
+
+        args.set(1, new Argument(ARG_DATA_TYPE, Note.TABLE_NAME));
+        triggerRefresh(args);
     }
 }
