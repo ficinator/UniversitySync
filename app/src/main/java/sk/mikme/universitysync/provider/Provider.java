@@ -74,6 +74,18 @@ public class Provider extends ContentProvider {
      * URI ID for route: /users/{ID}
      */
     public static final int ROUTE_USERS_GROUPS_ID = 10;
+    /**
+     * URI ID for route: /members
+     */
+    public static final int ROUTE_MEMBERS = 11;
+    /**
+     * URI ID for route: /members/{ID}
+     */
+    public static final int ROUTE_MEMBERS_ID = 12;
+    /**
+     * URI ID for route: /members/users/{ID}
+     */
+    public static final int ROUTE_MEMBERS_USERS_ID = 13;
 
     /**
      * UriMatcher, used to decode incoming URIs.
@@ -88,6 +100,9 @@ public class Provider extends ContentProvider {
         sUriMatcher.addURI(AUTHORITY, "groups/users/#", ROUTE_GROUPS_USERS_ID);
         sUriMatcher.addURI(AUTHORITY, "users", ROUTE_USERS);
         sUriMatcher.addURI(AUTHORITY, "users/#", ROUTE_USERS_ID);
+        sUriMatcher.addURI(AUTHORITY, "members", ROUTE_MEMBERS);
+        sUriMatcher.addURI(AUTHORITY, "members/#", ROUTE_MEMBERS_ID);
+        sUriMatcher.addURI(AUTHORITY, "members/users/#", ROUTE_MEMBERS_USERS_ID);
     }
 
     @Override
@@ -130,6 +145,11 @@ public class Provider extends ContentProvider {
             case ROUTE_USERS_GROUPS_ID:
                 builder.table(User.TABLE_NAME);
                 break;
+            case ROUTE_MEMBERS:
+            case ROUTE_MEMBERS_ID:
+            case ROUTE_MEMBERS_USERS_ID:
+                builder.table(Member.TABLE_NAME);
+                break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -151,6 +171,12 @@ public class Provider extends ContentProvider {
                 break;
             case ROUTE_USERS_ID:
                 builder.where(User.COLUMN_NAME_USER_ID + "=?", id);
+                break;
+            case ROUTE_MEMBERS_ID:
+                builder.where(Member.COLUMN_NAME_MEMBER_ID + "=?", id);
+                break;
+            case ROUTE_MEMBERS_USERS_ID:
+                builder.where(Member.COLUMN_NAME_USER_ID + "=?", id);
                 break;
         }
 
@@ -178,6 +204,10 @@ public class Provider extends ContentProvider {
                 return User.TYPE;
             case ROUTE_USERS_ID:
                 return User.ITEM_TYPE;
+            case ROUTE_MEMBERS:
+                return Member.TYPE;
+            case ROUTE_MEMBERS_ID:
+                return Member.ITEM_TYPE;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -195,20 +225,18 @@ public class Provider extends ContentProvider {
                 id = db.insertOrThrow(Note.TABLE_NAME, null, values);
                 result = Uri.parse(Note.URI + "/" + id);
                 break;
-            case ROUTE_NOTES_ID:
-                throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
             case ROUTE_GROUPS:
                 id = db.insertOrThrow(Group.TABLE_NAME, null, values);
                 result = Uri.parse(Group.URI + "/" + id);
                 break;
-            case ROUTE_GROUPS_ID:
-                throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
             case ROUTE_USERS:
                 id = db.insertOrThrow(User.TABLE_NAME, null, values);
                 result = Uri.parse(User.URI + "/" + id);
                 break;
-            case ROUTE_USERS_ID:
-                throw new UnsupportedOperationException("Insert not supported on URI: " + uri);
+            case ROUTE_MEMBERS:
+                id = db.insertOrThrow(Member.TABLE_NAME, null, values);
+                result = Uri.parse(Member.URI + "/" + id);
+                break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -259,6 +287,17 @@ public class Provider extends ContentProvider {
             case ROUTE_USERS_ID:
                 count = builder.table(User.TABLE_NAME)
                         .where(User._ID + "=?", id)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_MEMBERS:
+                count = builder.table(Member.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_MEMBERS_ID:
+                count = builder.table(Member.TABLE_NAME)
+                        .where(Member._ID + "=?", id)
                         .where(selection, selectionArgs)
                         .delete(db);
                 break;
@@ -313,6 +352,17 @@ public class Provider extends ContentProvider {
             case ROUTE_USERS_ID:
                 count = builder.table(User.TABLE_NAME)
                         .where(User._ID + "=?", id)
+                        .where(selection, selectionArgs)
+                        .update(db, values);
+                break;
+            case ROUTE_MEMBERS:
+                count = builder.table(Member.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .update(db, values);
+                break;
+            case ROUTE_MEMBERS_ID:
+                count = builder.table(Member.TABLE_NAME)
+                        .where(Member._ID + "=?", id)
                         .where(selection, selectionArgs)
                         .update(db, values);
                 break;

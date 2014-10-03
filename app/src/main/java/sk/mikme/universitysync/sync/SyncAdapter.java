@@ -7,6 +7,8 @@ import android.content.ContentProviderClient;
 import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.OperationApplicationException;
 import android.content.SyncResult;
 import android.database.Cursor;
@@ -34,7 +36,9 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import sk.mikme.universitysync.activities.MainActivity;
 import sk.mikme.universitysync.provider.Group;
+import sk.mikme.universitysync.provider.Member;
 import sk.mikme.universitysync.provider.Note;
 import sk.mikme.universitysync.provider.Provider;
 import sk.mikme.universitysync.provider.User;
@@ -52,10 +56,12 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
     public static final String DATA_SCRIPT_PATH = "getData.php";
     public static final int NET_READ_TIMEOUT_MILLIS = 10000;
     public static final int NET_CONNECT_TIMEOUT_MILLIS = 15000;
-    private static final String ARG_DATA_TYPE = "data_type";
+    public static final String ARG_DATA_TYPE = "data_type";
     private static final String ARGS_LENGTH = "args_length";
     private static final String ARG = "arg";
     public static final String SET_COOKIE = "Set-Cookie";
+    public static final String ACTION_FINISHED_SYNC = "sk.mikme.universitysync.ACTION_FINISHED_SYNC";
+    public static IntentFilter SYNC_INTENT_FILTER = new IntentFilter(ACTION_FINISHED_SYNC);
     /**
      * Content resolver, for performing database operations.
      */
@@ -96,15 +102,24 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
                               ContentProviderClient contentProviderClient,
                               SyncResult syncResult) {
 
-        List<String> args = new ArrayList<String>();
-        for (int i = 0; i < bundle.getInt(ARGS_LENGTH); i++)
-            args.add(bundle.getString(ARG + i));
+        //System.out.print("Sync");
+
+        List<Argument> args = new ArrayList<Argument>();
+        for (int i = 0; i < bundle.getInt(ARGS_LENGTH); i++) {
+            Argument arg = new Argument(bundle.getString(ARG + i));
+            args.add(arg);
+
+            //System.out.print(" " + arg.toString());
+        }
+
+        //System.out.println();
 
         try {
             URL location = getLocation(args);
             JSONObject data = downloadUrl(location);
-            if (data != null)
-                updateLocalData(data, syncResult);
+            if (data != null) {
+                updateLocalData(data, args, syncResult);
+            }
         } catch (MalformedURLException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -126,46 +141,90 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         mAccount = account;
     }
 
-    private void updateLocalData(JSONObject jsonObject, SyncResult syncResult)
+    private void updateLocalData(JSONObject jsonObject, List<Argument> args, SyncResult syncResult)
             throws IOException, JSONException, RemoteException, OperationApplicationException {
 
         ContentResolver contentResolver = getContext().getContentResolver();
+        Intent intent = new Intent(ACTION_FINISHED_SYNC);
 
         // update users
         if (!jsonObject.isNull(User.PATH)) {
+            Uri uri = User.URI;
+            for (Argument arg : args) {
+                if (arg.getName().equals(User.COLUMN_NAME_USER_ID)) {
+                    uri = uri.buildUpon().appendPath(arg.getValue()).build();
+                }
+            }
             // parse users from JSON object
             HashMap<String, User> users = DataParser.parseUsers(jsonObject);
             // get notes prom database
             Cursor c = contentResolver.query(
-                    User.URI,
+                    uri,
                     User.PROJECTION,
                     null, null, null);
             // find new items
             updateUsers(users, c, syncResult);
+            intent.putExtra(ARG_DATA_TYPE, User.TABLE_NAME);
         }
         // update notes
         else if (!jsonObject.isNull(Note.PATH)) {
+            Uri uri = Note.URI;
+            for (Argument arg : args) {
+                if (arg.getName().equals(User.COLUMN_NAME_USER_ID)) {
+                    uri = uri.buildUpon()
+                            .appendPath(User.PATH)
+                            .appendPath(arg.getValue()).build();
+                }
+                else if (arg.getName().equals(Group.COLUMN_NAME_GROUP_ID)) {
+                    uri = uri.buildUpon()
+                            .appendPath(Group.PATH)
+                            .appendPath(arg.getValue()).build();
+                }
+            }
             // parse notes from JSON object
             HashMap<String, Note> notes = DataParser.parseNotes(jsonObject);
             // get notes prom database
             Cursor c = contentResolver.query(
-                    Note.URI,
+                    uri,
                     Note.PROJECTION,
                     null, null, null);
             // find new items
             updateNotes(notes, c, syncResult);
+            intent.putExtra(ARG_DATA_TYPE, Note.TABLE_NAME);
         }
         else if (!jsonObject.isNull(Group.PATH)) {
+            Uri uriGroup = Group.URI;
+            Uri uriMember = Member.URI;
+            for (Argument arg : args) {
+                if (arg.getName().equals(User.COLUMN_NAME_USER_ID)) {
+                    uriMember = uriMember.buildUpon()
+                            .appendPath(User.PATH)
+                            .appendPath(arg.getValue()).build();
+                    uriGroup = uriGroup.buildUpon()
+                            .appendPath(User.PATH)
+                            .appendPath(arg.getValue()).build();
+                }
+            }
             // parse groups from JSON object
             HashMap<String, Group> groups = DataParser.parseGroups(jsonObject);
+            HashMap<String, Member> members = DataParser.parseMembers(jsonObject);
             // get groups prom database
-            Cursor c = contentResolver.query(
-                    Group.URI,
+            Cursor cMember = contentResolver.query(
+                    uriMember,
+                    Member.PROJECTION,
+                    null, null, null);
+            Cursor cGroup = contentResolver.query(
+                    uriGroup,
                     Group.PROJECTION,
                     null, null, null);
             // find new items
-            updateGroups(groups, c, syncResult);
+            updateMembers(members, cMember, syncResult);
+            updateGroups(groups, cGroup, syncResult);
+            intent.putExtra(ARG_DATA_TYPE, Group.TABLE_NAME);
         }
+
+        // inform activity about finished sync
+        getContext().sendBroadcast(intent);
     }
 
     private SyncResult updateUsers(HashMap<String, User> users, Cursor c, SyncResult syncResult)
@@ -272,11 +331,58 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         return syncResult;
     }
 
+    private SyncResult updateMembers(HashMap<String, Member> members, Cursor c, SyncResult syncResult)
+            throws RemoteException, OperationApplicationException {
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        while (c.moveToNext()) {
+            int id = c.getInt(Member.COLUMN_ID);
+            Member member = new Member(c);
+            syncResult.stats.numEntries++;
+            Member match = members.get(Integer.toString(member.getMemberId()));
+            if (match != null) {
+                members.remove(Integer.toString(member.getMemberId()));
+                Uri existingUri = Member.URI.buildUpon()
+                        .appendPath(Integer.toString(id)).build();
+                // if remote version is newer than local one
+                if (!match.equals(member)) {
+                    // update existing record
+                    batch.add(ContentProviderOperation.newUpdate(existingUri)
+                            .withValue(Member.COLUMN_NAME_MEMBER_ID, match.getMemberId())
+                            .withValue(Member.COLUMN_NAME_USER_ID, match.getUserId())
+                            .withValue(Member.COLUMN_NAME_GROUP_ID, match.getGroupId())
+                            .withValue(Member.COLUMN_NAME_ADMIN, match.isAdmin() ? 1 : 0)
+                            .build());
+                    syncResult.stats.numUpdates++;
+                }
+            }
+        }
+        c.close();
+
+        // Add new members
+        for (Member member : members.values()) {
+            batch.add(ContentProviderOperation.newInsert(Member.URI)
+                    .withValue(Member.COLUMN_NAME_MEMBER_ID, member.getMemberId())
+                    .withValue(Member.COLUMN_NAME_USER_ID, member.getUserId())
+                    .withValue(Member.COLUMN_NAME_GROUP_ID, member.getGroupId())
+                    .withValue(Member.COLUMN_NAME_ADMIN, member.isAdmin() ? 1 : 0)
+                    .build());
+            syncResult.stats.numInserts++;
+        }
+        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
+        mContentResolver.notifyChange(
+                Member.URI,
+                null,
+                false);                         // IMPORTANT: Do not sync to network
+        // This sample doesn't support uploads, but if *your* code does, make sure you set
+        // syncToNetwork=false in the line above to prevent duplicate syncs.
+        return syncResult;
+    }
+
     private SyncResult updateGroups(HashMap<String, Group> groups, Cursor c, SyncResult syncResult)
             throws RemoteException, OperationApplicationException {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
         while (c.moveToNext()) {
-            int id = c.getInt(Note.COLUMN_ID);
+            int id = c.getInt(Group.COLUMN_ID);
             Group group = new Group(c);
             syncResult.stats.numEntries++;
             Group match = groups.get(Integer.toString(group.getGroupId()));
@@ -345,12 +451,11 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         ContentResolver.requestSync(mAccount, Provider.AUTHORITY, b);
     }
 
-    public URL getLocation(List<String> args)
+    public URL getLocation(List<Argument> args)
             throws MalformedURLException, UnsupportedEncodingException {
         String urlString = SyncAdapter.SERVER_URL + SyncAdapter.DATA_SCRIPT_PATH + "?";
-        for (String arg : args) {
-            String[] parts = arg.split("=");
-            urlString += parts[0] + "=" + URLEncoder.encode(parts[1], "UTF-8") + "&";
+        for (Argument arg : args) {
+            urlString += arg.getName() + "=" + URLEncoder.encode(arg.getValue(), "UTF-8") + "&";
         }
         return  new URL(urlString);
     }
@@ -391,16 +496,24 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         return str.toString();
     }
 
-    public static void syncCurrentUserData() {
+    public static void syncCurrentUser() {
         ArrayList<Argument> args = new ArrayList<Argument>();
         args.add(new Argument(User.COLUMN_NAME_USER_ID, Integer.toString(mSession.getUserId())));
         args.add(new Argument(ARG_DATA_TYPE, User.TABLE_NAME));
         triggerRefresh(args);
+    }
 
-        args.set(1, new Argument(ARG_DATA_TYPE, Group.TABLE_NAME));
+    public static void syncCurrentUserGroups() {
+        ArrayList<Argument> args = new ArrayList<Argument>();
+        args.add(new Argument(User.COLUMN_NAME_USER_ID, Integer.toString(mSession.getUserId())));
+        args.add(new Argument(ARG_DATA_TYPE, Group.TABLE_NAME));
         triggerRefresh(args);
+    }
 
-        args.set(1, new Argument(ARG_DATA_TYPE, Note.TABLE_NAME));
+    public static void syncCurrentUserNotes() {
+        ArrayList<Argument> args = new ArrayList<Argument>();
+        args.add(new Argument(User.COLUMN_NAME_USER_ID, Integer.toString(mSession.getUserId())));
+        args.add(new Argument(ARG_DATA_TYPE, Note.TABLE_NAME));
         triggerRefresh(args);
     }
 }

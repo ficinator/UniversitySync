@@ -60,10 +60,10 @@ public class Member implements BaseColumns {
     private boolean mIsAdmin;
 
     public Member(JSONObject object) throws JSONException {
-        mMemberId = object.getInt("id");
-        mUserId = object.getInt("user_id");
-        mGroupId = object.getInt("group_id");
-        mIsAdmin = object.getBoolean("admin");
+        mMemberId = object.getInt("id_member");
+        mUserId = object.getInt("id_user");
+        mGroupId = object.getInt("id_group");
+        mIsAdmin = object.getString("admin").equals("1") ? true : false;
     }
 
     public Member(Cursor c) {
@@ -71,6 +71,18 @@ public class Member implements BaseColumns {
         mUserId = c.getInt(COLUMN_USER_ID);
         mGroupId = c.getInt(COLUMN_GROUP_ID);
         mIsAdmin = c.getInt(COLUMN_ADMIN) == 1;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof Member) {
+            Member member = (Member) o;
+            return (getMemberId() == member.getMemberId() &&
+                    getUserId() == member.getUserId() &&
+                    getGroupId() == member.getGroupId() &&
+                    isAdmin() == member.isAdmin());
+        }
+        return false;
     }
 
     public int getGroupId() {

@@ -14,5 +14,6 @@
     <string name="error_email_required">Email required</string>
     <string name="error_invalid_email">Invalid email</string>
     <string name="refresh">Refresh</string>
+    <string name="groups">Groups</string>
 
 </resources>

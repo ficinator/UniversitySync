@@ -12,7 +12,9 @@ import android.widget.TextView;
 import java.util.List;
 
 import sk.mikme.universitysync.R;
+import sk.mikme.universitysync.drawer.DrawerGroupItem;
 import sk.mikme.universitysync.drawer.DrawerItem;
+import sk.mikme.universitysync.drawer.DrawerTitleItem;
 import sk.mikme.universitysync.drawer.DrawerUserItem;
 
 /**
@@ -41,13 +43,13 @@ public class DrawerListAdapter extends ArrayAdapter<DrawerItem> {
         titleView.setText(item.getTitle());
         subtitleView.setText(item.getSubTitle());
 
-//        if (item instanceof DrawerCategoryItem) {
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-//                titleView.setAllCaps(true);
-//            thumbView.setVisibility(View.GONE);
-//            subtitleView.setVisibility(View.GONE);
-//        }
-        if (item instanceof DrawerUserItem) {
+        if (item instanceof DrawerTitleItem) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH)
+                titleView.setAllCaps(true);
+            thumbView.setVisibility(View.GONE);
+            subtitleView.setVisibility(View.GONE);
+        }
+        if (item instanceof DrawerUserItem || item instanceof DrawerGroupItem) {
             //thumbView.setImageDrawable(item.getIcon());
             thumbView.setVisibility(View.VISIBLE);
             subtitleView.setVisibility(View.VISIBLE);

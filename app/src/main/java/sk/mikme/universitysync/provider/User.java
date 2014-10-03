@@ -115,11 +115,11 @@ public class User implements BaseColumns, Parcelable {
     public boolean equals(Object o) {
         if (o instanceof User) {
             User user = (User) o;
-            return (getName().equals(user.getName()) ||
-                    getSurname().equals(user.getSurname()) ||
-                    getEmail().equals(user.getEmail()) ||
-                    getUniversity().equals(user.getUniversity()) ||
-                    getInfo().equals(user.getInfo()) ||
+            return (getName().equals(user.getName()) &&
+                    getSurname().equals(user.getSurname()) &&
+                    getEmail().equals(user.getEmail()) &&
+                    getUniversity().equals(user.getUniversity()) &&
+                    getInfo().equals(user.getInfo()) &&
                     getRank() == user.getRank());
         }
         return false;

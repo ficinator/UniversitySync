@@ -1,8 +1,13 @@
 package sk.mikme.universitysync.fragments;
 
+import android.accounts.Account;
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.SyncStatusObserver;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.provider.BaseColumns;
@@ -21,6 +26,7 @@ import android.widget.TextView;
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.provider.Group;
 import sk.mikme.universitysync.provider.Note;
+import sk.mikme.universitysync.provider.Provider;
 import sk.mikme.universitysync.provider.User;
 import sk.mikme.universitysync.sync.SyncAdapter;
 
@@ -44,6 +50,7 @@ public class NoteListFragment extends ListFragment
     private SimpleCursorAdapter mAdapter;
     private Menu mOptionsMenu;
     private Parcelable mSelectionArgs;
+    private Object mSyncObserverHandle;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -99,6 +106,26 @@ public class NoteListFragment extends ListFragment
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+//        mSyncStatusObserver.onStatusChanged(0);
+//
+//        // Watch for sync state changes
+//        final int mask = ContentResolver.SYNC_OBSERVER_TYPE_PENDING |
+//                ContentResolver.SYNC_OBSERVER_TYPE_ACTIVE;
+//        mSyncObserverHandle = ContentResolver.addStatusChangeListener(mask, mSyncStatusObserver);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+//        if (mSyncObserverHandle != null) {
+//            ContentResolver.removeStatusChangeListener(mSyncObserverHandle);
+//            mSyncObserverHandle = null;
+//        }
+    }
+
+    @Override
     public void onDetach() {
         super.onDetach();
     }
@@ -151,7 +178,7 @@ public class NoteListFragment extends ListFragment
         switch (item.getItemId()) {
             // If the user clicks the "Refresh" button.
             case R.id.menu_sync:
-                SyncAdapter.syncCurrentUserData();
+                SyncAdapter.syncCurrentUserNotes();
                 return true;
         }
         return super.onOptionsItemSelected(item);
@@ -163,4 +190,64 @@ public class NoteListFragment extends ListFragment
         if (isAdded())
             getLoaderManager().initLoader(0, null, this);
     }
+
+    /**
+     * Set the state of the Sync button. If a sync is active, turn on the ProgressBar widget.
+     * Otherwise, turn it off.
+     *
+     * @param syncing True if an active sync is occuring, false otherwise
+     */
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    public void setSyncActionButtonState(boolean syncing) {
+        if (mOptionsMenu == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
+            return;
+        }
+
+        final MenuItem syncItem = mOptionsMenu.findItem(R.id.menu_sync);
+        if (syncItem != null) {
+            if (syncing) {
+                syncItem.setActionView(R.layout.actionbar_sync_progress);
+            } else {
+                syncItem.setActionView(null);
+            }
+        }
+    }
+
+    /**
+     * Create a new anonymous SyncStatusObserver. It's attached to the app's ContentResolver in
+     * onResume(), and removed in onPause(). If status changes, it sets the state of the Refresh
+     * button. If a sync is active or pending, the Refresh button is replaced by an indeterminate
+     * ProgressBar; otherwise, the button itself is displayed.
+     */
+    private SyncStatusObserver mSyncStatusObserver = new SyncStatusObserver() {
+        /** Callback invoked with the sync adapter status changes. */
+        @Override
+        public void onStatusChanged(int which) {
+            getActivity().runOnUiThread(new Runnable() {
+                /**
+                 * The SyncAdapter runs on a background thread. To update the UI, onStatusChanged()
+                 * runs on the UI thread.
+                 */
+                @Override
+                public void run() {
+                    // Create a handle to the account that was created by
+                    // SyncService.CreateSyncAccount(). This will be used to query the system to
+                    // see how the sync status has changed.
+                    Account account = SyncAdapter.getAccount();
+                    if (account == null) {
+                        // GetAccount() returned an invalid value. This shouldn't happen, but
+                        // we'll set the status to "not refreshing".
+                        setSyncActionButtonState(false);
+                        return;
+                    }
+
+                    // Test the ContentResolver to see if the sync adapter is active or pending.
+                    // Set the state of the refresh button accordingly.
+                    boolean syncActive = ContentResolver.isSyncActive(account, Provider.AUTHORITY);
+                    boolean syncPending = ContentResolver.isSyncPending(account, Provider.AUTHORITY);
+                    setSyncActionButtonState(syncActive || syncPending);
+                }
+            });
+        }
+    };
 }

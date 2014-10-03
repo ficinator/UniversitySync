@@ -7,6 +7,7 @@ import org.json.JSONObject;
 import java.util.HashMap;
 
 import sk.mikme.universitysync.provider.Group;
+import sk.mikme.universitysync.provider.Member;
 import sk.mikme.universitysync.provider.Note;
 import sk.mikme.universitysync.provider.User;
 
@@ -38,7 +39,7 @@ public class DataParser {
         return groups;
     }
 
-    public static HashMap<String,User> parseUsers(JSONObject jsonObject) throws JSONException {
+    public static HashMap<String, User> parseUsers(JSONObject jsonObject) throws JSONException {
         JSONArray userArray = jsonObject.getJSONArray(User.PATH);
         HashMap<String, User> users = new HashMap<String, User>();
         for (int i = 0; i < userArray.length(); i++) {
@@ -46,5 +47,15 @@ public class DataParser {
             users.put(Integer.toString(user.getUserId()), user);
         }
         return users;
+    }
+
+    public static HashMap<String, Member> parseMembers(JSONObject jsonObject) throws JSONException {
+        JSONArray memberArray = jsonObject.getJSONArray(Group.PATH);
+        HashMap<String, Member> members = new HashMap<String, Member>();
+        for (int i = 0; i < memberArray.length(); i++) {
+            Member member = new Member(memberArray.getJSONObject(i));
+            members.put(Integer.toString(member.getMemberId()), member);
+        }
+        return members;
     }
 }

@@ -14,6 +14,10 @@ public class Argument extends BasicNameValuePair implements Parcelable {
         super(name, value);
     }
 
+    public Argument(String string) {
+        super(string.split("=")[0], string.split("=")[1]);
+    }
+
     @Override
     public String toString() {
         return getName() + "=" + getValue();

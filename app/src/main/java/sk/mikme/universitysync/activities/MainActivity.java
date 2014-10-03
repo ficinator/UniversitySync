@@ -2,6 +2,8 @@ package sk.mikme.universitysync.activities;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.Cursor;
@@ -25,7 +27,9 @@ import java.util.List;
 
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.adapters.DrawerListAdapter;
+import sk.mikme.universitysync.drawer.DrawerGroupItem;
 import sk.mikme.universitysync.drawer.DrawerItem;
+import sk.mikme.universitysync.drawer.DrawerTitleItem;
 import sk.mikme.universitysync.drawer.DrawerUserItem;
 import sk.mikme.universitysync.fragments.HomeFragment;
 import sk.mikme.universitysync.provider.Group;
@@ -72,12 +76,19 @@ public class MainActivity extends ActionBarActivity
     @Override
     public void onResume() {
         super.onResume();
+        // register for sync
+        registerReceiver(mSyncBroadcastReceiver, SyncAdapter.SYNC_INTENT_FILTER);
     }
 
+    @Override
+    protected void onPause() {
+        unregisterReceiver(mSyncBroadcastReceiver);
+        super.onPause();
+    };
+
     private void showCurrentUserData() {
-        SyncAdapter.syncCurrentUserData();
         getSupportLoaderManager().initLoader(LOADER_USER, null, this);
-        getSupportLoaderManager().initLoader(LOADER_GROUPS, null, this);
+        SyncAdapter.syncCurrentUser();
     }
 
     private void initLeftDrawer() {
@@ -202,15 +213,18 @@ public class MainActivity extends ActionBarActivity
                 if (cursor.moveToFirst()) {
                     User user = new User(cursor);
                     mDrawerItems.add(new DrawerUserItem(user));
+                    mDrawerItems.add(new DrawerTitleItem(getResources().getString(R.string.groups)));
                     FragmentManager fm = getSupportFragmentManager();
                     HomeFragment homeFragment = (HomeFragment) fm.findFragmentById(R.id.content);
                     homeFragment.setUser(user);
+                    getSupportLoaderManager().initLoader(LOADER_GROUPS, null, this);
+                    SyncAdapter.syncCurrentUserGroups();
                 }
                 getSupportLoaderManager().destroyLoader(LOADER_USER);
                 break;
             case LOADER_GROUPS:
                 while (cursor.moveToNext()) {
-                    Group group = new Group(cursor);
+                    mDrawerItems.add(new DrawerGroupItem(new Group(cursor)));
                 }
                 getSupportLoaderManager().destroyLoader(LOADER_GROUPS);
         }
@@ -231,4 +245,15 @@ public class MainActivity extends ActionBarActivity
             fragment = new HomeFragment();
         transaction.replace(R.id.content, fragment).commit();
     }
+
+    private BroadcastReceiver mSyncBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String dataType = intent.getStringExtra(SyncAdapter.ARG_DATA_TYPE);
+            if (dataType.equals(User.TABLE_NAME))
+                getSupportLoaderManager().initLoader(LOADER_USER, null, MainActivity.this);
+            else if (dataType.equals(Group.TABLE_NAME))
+                getSupportLoaderManager().initLoader(LOADER_GROUPS, null, MainActivity.this);
+        }
+    };
 }

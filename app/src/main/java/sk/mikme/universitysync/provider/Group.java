@@ -69,11 +69,11 @@ public class Group implements BaseColumns {
     //private Drawable mThumb;
 
     public Group(JSONObject object) throws JSONException {
-        this.mGroupId = object.getInt("id");
+        this.mGroupId = object.getInt("id_group");
         this.mName = object.getString("name");
         this.mUniversity = object.getString("university");
         this.mInfo = object.getString("info");
-        this.mIsPublic = object.getBoolean("public");
+        this.mIsPublic = object.getString("public").equals("1") ? true : false;
         this.mMemberInfo = object.getString("member_info");
     }
 
@@ -90,10 +90,10 @@ public class Group implements BaseColumns {
     public boolean equals(Object o) {
         if (o instanceof Group) {
             Group group = (Group) o;
-            return (getName().equals(group.getName()) ||
-                    getUniversity().equals(group.getUniversity()) ||
-                    getInfo().equals(group.getInfo()) ||
-                    isPublic() == group.isPublic() ||
+            return (getName().equals(group.getName()) &&
+                    getUniversity().equals(group.getUniversity()) &&
+                    getInfo().equals(group.getInfo()) &&
+                    isPublic() == group.isPublic() &&
                     getMemberInfo().equals(group.getMemberInfo()));
         }
         return false;
