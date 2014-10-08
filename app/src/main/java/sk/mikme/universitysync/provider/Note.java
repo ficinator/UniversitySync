@@ -1,8 +1,10 @@
 package sk.mikme.universitysync.provider;
 
 import android.content.ContentResolver;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.provider.BaseColumns;
 
 import org.json.JSONArray;
@@ -20,7 +22,7 @@ import sk.mikme.universitysync.provider.Provider;
 /**
  * Created by fic on 18.9.2014.
  */
-public class Note implements BaseColumns {
+public class Note implements BaseColumns, Parcelable {
     public static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
     /**
      * Path component for "note"-type resources..
@@ -45,8 +47,10 @@ public class Note implements BaseColumns {
     public static final String COLUMN_NAME_NOTE_ID = "note_id";
     public static final String COLUMN_NAME_USER_ID = "user_id";
     public static final String COLUMN_NAME_GROUP_ID = "group_id";
+    public static final String COLUMN_NAME_TITLE= "title";
     public static final String COLUMN_NAME_LIKES = "likes";
     public static final String COLUMN_NAME_DATE = "date";
+    public static final String COLUMN_NAME_CONTENT = "content";
 
     /**
      * Projection for querying the content provider.
@@ -56,25 +60,28 @@ public class Note implements BaseColumns {
             COLUMN_NAME_NOTE_ID,
             COLUMN_NAME_USER_ID,
             COLUMN_NAME_GROUP_ID,
+            COLUMN_NAME_TITLE,
             COLUMN_NAME_LIKES,
             COLUMN_NAME_DATE,
+            COLUMN_NAME_CONTENT,
     };
 
     public static final int COLUMN_ID = 0;
     public static final int COLUMN_NOTE_ID = 1;
     public static final int COLUMN_USER_ID = 2;
     public static final int COLUMN_GROUP_ID = 3;
-    public static final int COLUMN_LIKES = 4;
-    public static final int COLUMN_DATE = 5;
+    public static final int COLUMN_TITLE = 4;
+    public static final int COLUMN_LIKES = 5;
+    public static final int COLUMN_DATE = 6;
+    public static final int COLUMN_CONTENT = 7;
 
     private int mNoteId;
     private int mUserId;
     private int mGroupId;
-    //private int mFolderId;
+    private String mTitle;
     private int mLikes;
     private String mPath;
     private long mDate;
-    //private String mCategory;
     private List<String> mKeywords;
     private List<String> mReferences;
     private String mContent;
@@ -83,18 +90,44 @@ public class Note implements BaseColumns {
         mNoteId = object.getInt("id");
         mUserId = object.getInt("id_user");
         mGroupId = object.getInt("id_group");
-        //mFolderId = object.getInt("id_folder");
+        mTitle = "";
         mLikes = object.getInt("likes");
         mPath = "." + object.getString("path");
         try {
             mDate = new SimpleDateFormat(DATE_FORMAT).parse(object.getString("date")).getTime();
         } catch (ParseException e) {
-            mDate = 0;
+            mDate = new Date().getTime();
         }
-        //mCategory = object.getString("category");
         mKeywords = new ArrayList<String>();
         mReferences = new ArrayList<String>();
         mContent = "";
+    }
+
+    public Note(Parcel in) {
+        mKeywords = new ArrayList<String>();
+        mReferences = new ArrayList<String>();
+        mNoteId = in.readInt();
+        mUserId = in.readInt();
+        mGroupId = in.readInt();
+        mTitle = in.readString();
+        mLikes = in.readInt();
+        mPath = in.readString();
+        mDate = in.readLong();
+        in.readStringList(mKeywords);
+        in.readStringList(mReferences);
+        mContent = in.readString();
+    }
+
+    public Note(Cursor c) {
+        mNoteId = c.getInt(COLUMN_NOTE_ID);
+        mUserId = c.getInt(COLUMN_USER_ID);
+        mGroupId = c.getInt(COLUMN_GROUP_ID);
+        mTitle = c.getString(COLUMN_TITLE);
+        mLikes = c.getInt(COLUMN_LIKES);
+        mDate = c.getLong(COLUMN_DATE);
+        mKeywords = new ArrayList<String>();
+        mReferences = new ArrayList<String>();
+        mContent = c.getString(COLUMN_CONTENT);
     }
 
     public int getUserId() {
@@ -113,14 +146,6 @@ public class Note implements BaseColumns {
         this.mGroupId = mGroupId;
     }
 
-//    public int getFolderId() {
-//        return mFolderId;
-//    }
-
-//    public void setFolderId(int mFolderId) {
-//        this.mFolderId = mFolderId;
-//    }
-
     public int getNoteId() {
         return mNoteId;
     }
@@ -128,6 +153,15 @@ public class Note implements BaseColumns {
     public void setNoteId(int mNoteId) {
         this.mNoteId = mNoteId;
     }
+
+    public String getTitle() {
+        return mTitle;
+    }
+
+    public void setTitle(String mTitle) {
+        this.mTitle = mTitle;
+    }
+
     public int getLikes() {
         return mLikes;
     }
@@ -154,10 +188,6 @@ public class Note implements BaseColumns {
         mDate = date;
     }
 
-//    public String getCategory() { return mCategory; }
-
-//    public void setCategory(String mCategory) { this.mCategory = mCategory; }
-
     public String getContent() {
         return mContent;
     }
@@ -174,59 +204,64 @@ public class Note implements BaseColumns {
 
     public void setReferences(List<String> references) { mReferences = references; }
 
-//    @Override
-//    public void writeToParcel(Parcel out, int flags) {
-//        super.writeToParcel(out, flags);
-//        out.writeInt(mUserId);
-//        out.writeInt(mGroupId);
-//        out.writeInt(mFolderId);
-//        out.writeInt(mLikes);
-//        out.writeString(mPath);
-//        out.writeLong(mDate);
-//        out.writeString(mCategory);
-//        out.writeStringList(mKeywords);
-//        out.writeStringList(mReferences);
-//        out.writeString(mContent);
-//    }
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel out, int flags) {
+        out.writeInt(mNoteId);
+        out.writeInt(mUserId);
+        out.writeInt(mGroupId);
+        //out.writeInt(mFolderId);
+        out.writeString(mTitle);
+        out.writeInt(mLikes);
+        out.writeString(mPath);
+        out.writeLong(mDate);
+        //out.writeString(mCategory);
+        out.writeStringList(mKeywords);
+        out.writeStringList(mReferences);
+        out.writeString(mContent);
+    }
+
+    public static final Parcelable.Creator CREATOR = new Parcelable.Creator() {
+        public Note createFromParcel(Parcel in) {
+            return new Note(in);
+        }
+
+        public Note[] newArray(int size) {
+            return new Note[size];
+        }
+    };
 
     public void setDetails(JSONObject object) {
         try {
-            JSONObject details = object.getJSONObject("Note");
-
             mKeywords.clear();
-            if (details.get("KeyWords") instanceof JSONObject) {
-                JSONObject keywords = details.getJSONObject("KeyWords");
-                if (!keywords.isNull("KW")) {
-                    if (keywords.get("KW") instanceof JSONArray) {
-                        JSONArray kws = keywords.getJSONArray("KW");
-                        for (int i = 0; i < kws.length(); i++)
-                            mKeywords.add(kws.getString(i));
-                    }
-                    else if (keywords.get("KW") instanceof String)
-                        mKeywords.add(keywords.getString("KW"));
-                }
-            }
+            JSONArray keywords = object.getJSONArray("KeyWords");
+            for (int i = 0; i < keywords.length(); i++)
+                mKeywords.add(keywords.getString(i));
 
             mReferences.clear();
-            if (details.get("References") instanceof JSONObject) {
-                JSONObject references = details.getJSONObject("References");
-                if (!references.isNull("Ref")) {
-                    if (references.get("Ref") instanceof JSONArray) {
-                        JSONArray refs = references.getJSONArray("Ref");
-                        for (int i = 0; i < refs.length(); i++)
-                            mReferences.add(refs.getString(i));
-                    }
-                    else if (references.get("Ref") instanceof String)
-                        mReferences.add(references.getString("Ref"));
-                }
-            }
+            JSONArray references = object.getJSONArray("References");
+            for (int i = 0; i < references.length(); i++)
+                mReferences.add(references.getString(i));
 
-            if (details.get("Content") instanceof String)
-                mContent = details.getString("Content");
-
+            mContent = object.getString("Content");
+            mTitle = object.getString("Title");
         } catch (JSONException e) {
             //TODO:
             e.printStackTrace();
         }
+    }
+
+    public String getKeywordsString() {
+        if (mKeywords.isEmpty())
+            return "";
+        String keywords = "";
+        for (String keyword : mKeywords)
+            keywords += keyword + ", ";
+        return keywords.substring(0, keywords.length() - 2);
+
     }
 }

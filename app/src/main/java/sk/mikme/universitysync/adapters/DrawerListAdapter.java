@@ -21,38 +21,31 @@ import sk.mikme.universitysync.drawer.DrawerUserItem;
  * Created by fic on 21.9.2014.
  */
 public class DrawerListAdapter extends ArrayAdapter<DrawerItem> {
-    private static int DRAWER_ITEM_LAYOUT = R.layout.item_drawer;
 
     public DrawerListAdapter(Context context, List<DrawerItem> drawerItems) {
-        super(context, DRAWER_ITEM_LAYOUT, drawerItems);
+        super(context, R.layout.item_user_drawer, drawerItems);
     }
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        if (convertView == null) {
-            LayoutInflater inflater = (LayoutInflater) getContext().
-                    getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-            convertView = inflater.inflate(DRAWER_ITEM_LAYOUT, null);
-        }
         DrawerItem item = getItem(position);
+        LayoutInflater inflater = (LayoutInflater) getContext().
+                getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        if (item instanceof DrawerTitleItem)
+            convertView = inflater.inflate(R.layout.item_title_drawer, null);
+        else
+            convertView = inflater.inflate(R.layout.item_user_drawer, null);
 
-        ImageView thumbView = (ImageView) convertView.findViewById(R.id.thumb);
         TextView titleView = (TextView) convertView.findViewById(R.id.title);
-        TextView subtitleView = (TextView) convertView.findViewById(R.id.subtitle);
-
         titleView.setText(item.getTitle());
-        subtitleView.setText(item.getSubTitle());
 
-        if (item instanceof DrawerTitleItem) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-                titleView.setAllCaps(true);
-            thumbView.setVisibility(View.GONE);
-            subtitleView.setVisibility(View.GONE);
+        if (item instanceof  DrawerTitleItem) {
+            titleView.setText(item.getTitle().toUpperCase());
         }
-        if (item instanceof DrawerUserItem || item instanceof DrawerGroupItem) {
-            //thumbView.setImageDrawable(item.getIcon());
-            thumbView.setVisibility(View.VISIBLE);
-            subtitleView.setVisibility(View.VISIBLE);
+        else {
+            titleView.setText(item.getTitle());
+            TextView subtitleView = (TextView) convertView.findViewById(R.id.subtitle);
+            subtitleView.setText(item.getSubTitle());
         }
 
         return convertView;

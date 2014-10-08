@@ -32,7 +32,6 @@ public class Member implements BaseColumns {
     public static final Uri URI = Provider.BASE_URI.buildUpon().appendPath(PATH).build();
 
     public static final String TABLE_NAME = "member";
-    public static final String COLUMN_NAME_MEMBER_ID = "member_id";
     public static final String COLUMN_NAME_USER_ID = "user_id";
     public static final String COLUMN_NAME_GROUP_ID = "group_id";
     public static final String COLUMN_NAME_ADMIN = "admin";
@@ -42,32 +41,29 @@ public class Member implements BaseColumns {
      */
     public static final String[] PROJECTION = new String[]{
             _ID,
-            COLUMN_NAME_MEMBER_ID,
             COLUMN_NAME_USER_ID,
             COLUMN_NAME_GROUP_ID,
             COLUMN_NAME_ADMIN
     };
 
     public static final int COLUMN_ID = 0;
-    public static final int COLUMN_MEMBER_ID = 1;
-    public static final int COLUMN_USER_ID = 2;
-    public static final int COLUMN_GROUP_ID = 3;
-    public static final int COLUMN_ADMIN = 4;
+    public static final int COLUMN_USER_ID = 1;
+    public static final int COLUMN_GROUP_ID = 2;
+    public static final int COLUMN_ADMIN = 3;
 
-    private int mMemberId;
+    private int mId;
     private int mUserId;
     private int mGroupId;
     private boolean mIsAdmin;
 
     public Member(JSONObject object) throws JSONException {
-        mMemberId = object.getInt("id_member");
         mUserId = object.getInt("id_user");
         mGroupId = object.getInt("id_group");
         mIsAdmin = object.getString("admin").equals("1") ? true : false;
     }
 
     public Member(Cursor c) {
-        mMemberId = c.getInt(COLUMN_MEMBER_ID);
+        mId = c.getInt(COLUMN_ID);
         mUserId = c.getInt(COLUMN_USER_ID);
         mGroupId = c.getInt(COLUMN_GROUP_ID);
         mIsAdmin = c.getInt(COLUMN_ADMIN) == 1;
@@ -77,8 +73,7 @@ public class Member implements BaseColumns {
     public boolean equals(Object o) {
         if (o instanceof Member) {
             Member member = (Member) o;
-            return (getMemberId() == member.getMemberId() &&
-                    getUserId() == member.getUserId() &&
+            return (getUserId() == member.getUserId() &&
                     getGroupId() == member.getGroupId() &&
                     isAdmin() == member.isAdmin());
         }
@@ -91,14 +86,6 @@ public class Member implements BaseColumns {
 
     public void setGroupId(int mGroupId) {
         this.mGroupId = mGroupId;
-    }
-
-    public int getMemberId() {
-        return mMemberId;
-    }
-
-    public void setMemberId(int mMemberId) {
-        this.mMemberId = mMemberId;
     }
 
     public int getUserId() {
@@ -115,5 +102,13 @@ public class Member implements BaseColumns {
 
     public void setAdmin(boolean mIsAdmin) {
         this.mIsAdmin = mIsAdmin;
+    }
+
+    public int getId() {
+        return mId;
+    }
+
+    public void setId(int mId) {
+        this.mId = mId;
     }
 }

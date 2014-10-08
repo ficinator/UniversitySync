@@ -14,6 +14,7 @@ import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.BaseColumns;
 
+import java.security.Key;
 import java.util.ArrayList;
 
 /**
@@ -86,12 +87,37 @@ public class Provider extends ContentProvider {
      * URI ID for route: /members/users/{ID}
      */
     public static final int ROUTE_MEMBERS_USERS_ID = 13;
+    /**
+     * URI ID for route: /keywords
+     */
+    public static final int ROUTE_KEYWORDS = 14;
+    /**
+     * URI ID for route: /keywords/{NAME}
+     */
+    public static final int ROUTE_KEYWORDS_NAME = 15;
+    /**
+     * URI ID for route: /note_keywords
+     */
+    public static final int ROUTE_NOTE_KEYWORDS = 16;
+    /**
+     * URI ID for route: /note_keywords/{ID}
+     */
+    public static final int ROUTE_NOTE_KEYWORDS_ID = 17;
+    /**
+     * URI ID for route: /note_keywords/notes/{ID}
+     */
+    public static final int ROUTE_NOTE_KEYWORDS_NOTES_ID = 18;
 
     /**
      * UriMatcher, used to decode incoming URIs.
      */
     private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
     static {
+        sUriMatcher.addURI(AUTHORITY, "keywords", ROUTE_KEYWORDS);
+        sUriMatcher.addURI(AUTHORITY, "keywords/*", ROUTE_KEYWORDS_NAME);
+        sUriMatcher.addURI(AUTHORITY, "note_keywords", ROUTE_NOTE_KEYWORDS);
+        sUriMatcher.addURI(AUTHORITY, "note_keywords/#", ROUTE_NOTE_KEYWORDS_ID);
+        sUriMatcher.addURI(AUTHORITY, "note_keywords/notes/#", ROUTE_NOTE_KEYWORDS_NOTES_ID);
         sUriMatcher.addURI(AUTHORITY, "notes", ROUTE_NOTES);
         sUriMatcher.addURI(AUTHORITY, "notes/#", ROUTE_NOTES_ID);
         sUriMatcher.addURI(AUTHORITY, "notes/users/#", ROUTE_NOTES_USERS_ID);
@@ -150,6 +176,19 @@ public class Provider extends ContentProvider {
             case ROUTE_MEMBERS_USERS_ID:
                 builder.table(Member.TABLE_NAME);
                 break;
+            case ROUTE_KEYWORDS:
+            case ROUTE_KEYWORDS_NAME:
+                builder.table(Keyword.TABLE_NAME);
+                break;
+            case ROUTE_NOTE_KEYWORDS:
+            case ROUTE_NOTE_KEYWORDS_ID:
+                builder.table(NoteKeyword.TABLE_NAME);
+                break;
+            case ROUTE_NOTE_KEYWORDS_NOTES_ID:
+                builder.table(NoteKeyword.TABLE_NAME + " JOIN " + Keyword.TABLE_NAME + " ON "
+                        + NoteKeyword.TABLE_NAME + "." + NoteKeyword.COLUMN_NAME_KEYWORD_ID + "="
+                        + Keyword.TABLE_NAME + "." + Keyword._ID);
+                break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -173,10 +212,20 @@ public class Provider extends ContentProvider {
                 builder.where(User.COLUMN_NAME_USER_ID + "=?", id);
                 break;
             case ROUTE_MEMBERS_ID:
-                builder.where(Member.COLUMN_NAME_MEMBER_ID + "=?", id);
+                builder.where(Member._ID + "=?", id);
                 break;
             case ROUTE_MEMBERS_USERS_ID:
                 builder.where(Member.COLUMN_NAME_USER_ID + "=?", id);
+                break;
+            case ROUTE_KEYWORDS_NAME:
+                builder.where(Keyword.COLUMN_NAME_NAME + "=?", id);
+                break;
+            case ROUTE_NOTE_KEYWORDS_ID:
+                builder.where(NoteKeyword._ID + "=?", id);
+                break;
+            case ROUTE_NOTE_KEYWORDS_NOTES_ID:
+                builder.where(Note.COLUMN_NAME_NOTE_ID + "=?", id)
+                        .mapToTable(Keyword._ID, Keyword.TABLE_NAME);
                 break;
         }
 
@@ -208,6 +257,14 @@ public class Provider extends ContentProvider {
                 return Member.TYPE;
             case ROUTE_MEMBERS_ID:
                 return Member.ITEM_TYPE;
+            case ROUTE_KEYWORDS:
+                return Keyword.TYPE;
+            case ROUTE_KEYWORDS_NAME:
+                return Keyword.ITEM_TYPE;
+            case ROUTE_NOTE_KEYWORDS:
+                return NoteKeyword.TYPE;
+            case ROUTE_NOTE_KEYWORDS_ID:
+                return NoteKeyword.ITEM_TYPE;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
         }
@@ -236,6 +293,14 @@ public class Provider extends ContentProvider {
             case ROUTE_MEMBERS:
                 id = db.insertOrThrow(Member.TABLE_NAME, null, values);
                 result = Uri.parse(Member.URI + "/" + id);
+                break;
+            case ROUTE_KEYWORDS:
+                id = db.insertOrThrow(Keyword.TABLE_NAME, null, values);
+                result = Uri.parse(Keyword.URI + "/" + id);
+                break;
+            case ROUTE_NOTE_KEYWORDS:
+                id = db.insertOrThrow(NoteKeyword.TABLE_NAME, null, values);
+                result = Uri.parse(NoteKeyword.URI + "/" + id);
                 break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
@@ -298,6 +363,28 @@ public class Provider extends ContentProvider {
             case ROUTE_MEMBERS_ID:
                 count = builder.table(Member.TABLE_NAME)
                         .where(Member._ID + "=?", id)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_KEYWORDS:
+                count = builder.table(Keyword.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_KEYWORDS_NAME:
+                count = builder.table(Keyword.TABLE_NAME)
+                        .where(Keyword.COLUMN_NAME_NAME + "=?", id)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_NOTE_KEYWORDS:
+                count = builder.table(NoteKeyword.TABLE_NAME)
+                        .where(selection, selectionArgs)
+                        .delete(db);
+                break;
+            case ROUTE_NOTE_KEYWORDS_ID:
+                count = builder.table(NoteKeyword.TABLE_NAME)
+                        .where(NoteKeyword._ID + "=?", id)
                         .where(selection, selectionArgs)
                         .delete(db);
                 break;
@@ -415,7 +502,7 @@ public class Provider extends ContentProvider {
      * Provides access to an disk-backed, SQLite datastore which is utilized by Provider. This
      * database should never be accessed by other parts of the application directly.
      */
-    static class Database extends SQLiteOpenHelper {
+    public static class Database extends SQLiteOpenHelper {
         /** Schema version. */
         public static final int DATABASE_VERSION = 1;
         /** Filename for SQLite file. */
@@ -459,8 +546,7 @@ public class Provider extends ContentProvider {
         /** SQL statement to create "member" table. */
         private static final String SQL_CREATE_MEMBERS =
                 "CREATE TABLE " + Member.TABLE_NAME + " (" +
-                        Member._ID + " INTEGER PRIMARY KEY," +
-                        Member.COLUMN_NAME_MEMBER_ID + TYPE_INTEGER + COMMA_SEP +
+                        Member._ID + TYPE_INTEGER + " PRIMARY KEY" + COMMA_SEP +
                         Member.COLUMN_NAME_USER_ID + TYPE_INTEGER + COMMA_SEP +
                         Member.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
                         Member.COLUMN_NAME_ADMIN + TYPE_INTEGER + ")";
@@ -476,12 +562,35 @@ public class Provider extends ContentProvider {
                         Note.COLUMN_NAME_NOTE_ID + TYPE_INTEGER + COMMA_SEP +
                         Note.COLUMN_NAME_USER_ID + TYPE_INTEGER + COMMA_SEP +
                         Note.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
+                        Note.COLUMN_NAME_TITLE + TYPE_TEXT + COMMA_SEP +
                         Note.COLUMN_NAME_LIKES + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_DATE + TYPE_INTEGER + ")";
+                        Note.COLUMN_NAME_DATE + TYPE_INTEGER + COMMA_SEP +
+                        Note.COLUMN_NAME_CONTENT + TYPE_TEXT + ")";
 
         /** SQL statement to drop "note" table. */
         private static final String SQL_DELETE_NOTES =
                 "DROP TABLE IF EXISTS " + Note.TABLE_NAME;
+
+        /** SQL statement to create "keyword" table. */
+        private static final String SQL_CREATE_KEYWORDS =
+                "CREATE TABLE " + Keyword.TABLE_NAME + " (" +
+                        Keyword._ID + TYPE_INTEGER + " PRIMARY KEY" + COMMA_SEP +
+                        Keyword.COLUMN_NAME_NAME + TYPE_TEXT + ")";
+
+        /** SQL statement to drop "keyword" table. */
+        private static final String SQL_DELETE_KEYWORDS =
+                "DROP TABLE IF EXISTS " + Keyword.TABLE_NAME;
+
+        /** SQL statement to create "note_keyword" table. */
+        private static final String SQL_CREATE_NOTE_KEYWORDS =
+                "CREATE TABLE " + NoteKeyword.TABLE_NAME + " (" +
+                        NoteKeyword._ID + TYPE_INTEGER + " PRIMARY_KEY" + COMMA_SEP +
+                        NoteKeyword.COLUMN_NAME_NOTE_ID + TYPE_INTEGER + COMMA_SEP +
+                        NoteKeyword.COLUMN_NAME_KEYWORD_ID + TYPE_INTEGER + ")";
+
+        /** SQL statement to drop "keyword" table. */
+        private static final String SQL_DELETE_NOTE_KEYWORDS =
+                "DROP TABLE IF EXISTS " + NoteKeyword.TABLE_NAME;
 
         public Database(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -492,14 +601,18 @@ public class Provider extends ContentProvider {
             db.execSQL(SQL_CREATE_USERS);
             db.execSQL(SQL_CREATE_GROUPS);
             db.execSQL(SQL_CREATE_MEMBERS);
+            db.execSQL(SQL_CREATE_KEYWORDS);
             db.execSQL(SQL_CREATE_NOTES);
+            db.execSQL(SQL_CREATE_NOTE_KEYWORDS);
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
             // This database is only a cache for online data, so its upgrade policy is
             // to simply to discard the data and start over
+            db.execSQL(SQL_DELETE_NOTE_KEYWORDS);
             db.execSQL(SQL_DELETE_NOTES);
+            db.execSQL(SQL_DELETE_KEYWORDS);
             db.execSQL(SQL_DELETE_MEMBERS);
             db.execSQL(SQL_DELETE_USERS);
             db.execSQL(SQL_DELETE_GROUPS);

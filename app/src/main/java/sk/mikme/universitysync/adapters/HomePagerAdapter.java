@@ -4,26 +4,28 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
-import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import java.util.List;
-
 import sk.mikme.universitysync.R;
-import sk.mikme.universitysync.fragments.NoteListFragment;
+import sk.mikme.universitysync.fragments.NotesFragment;
+import sk.mikme.universitysync.provider.User;
 
 /**
  * Created by fic on 1.10.2014.
  */
 public class HomePagerAdapter extends FragmentPagerAdapter {
 
-    private FragmentManager mFragmentManager;
+    private static final String[] TAB_TITLES = { "Notes", "Folders", "Files" };
 
-    public HomePagerAdapter(FragmentManager fm) {
+    private FragmentManager mFragmentManager;
+    private User mUser;
+
+    public HomePagerAdapter(FragmentManager fm, User user) {
         super(fm);
         mFragmentManager = fm;
+        mUser = user;
     }
 
     @Override
@@ -34,11 +36,16 @@ public class HomePagerAdapter extends FragmentPagerAdapter {
             return fragment;
         switch (position) {
             case 0:
-                return new NoteListFragment();
+                return new NotesFragment();
             default:
                 return new FakeFragment();
 
         }
+    }
+
+    @Override
+    public CharSequence getPageTitle(int position) {
+        return TAB_TITLES[position].toUpperCase();
     }
 
     @Override

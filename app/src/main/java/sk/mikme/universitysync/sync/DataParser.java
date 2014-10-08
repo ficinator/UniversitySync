@@ -54,7 +54,9 @@ public class DataParser {
         HashMap<String, Member> members = new HashMap<String, Member>();
         for (int i = 0; i < memberArray.length(); i++) {
             Member member = new Member(memberArray.getJSONObject(i));
-            members.put(Integer.toString(member.getMemberId()), member);
+            members.put(
+                    Integer.toString(member.getUserId()) + "," + Integer.toString(member.getGroupId()),
+                    member);
         }
         return members;
     }

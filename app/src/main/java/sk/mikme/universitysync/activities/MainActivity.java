@@ -2,8 +2,6 @@ package sk.mikme.universitysync.activities;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.Cursor;
@@ -17,6 +15,7 @@ import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarActivity;
+import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -63,7 +62,7 @@ public class MainActivity extends ActionBarActivity
         if (account != null) {
             SyncAdapter.setSession(session);
             SyncAdapter.setAccount(account);
-            showCurrentUserData();
+            getSupportLoaderManager().initLoader(LOADER_USER, null, this);
         }
         else {
             Intent intent = new Intent(getApplicationContext(), LoginActivity.class);
@@ -77,19 +76,14 @@ public class MainActivity extends ActionBarActivity
     public void onResume() {
         super.onResume();
         // register for sync
-        registerReceiver(mSyncBroadcastReceiver, SyncAdapter.SYNC_INTENT_FILTER);
+        //registerReceiver(mSyncBroadcastReceiver, SyncAdapter.SYNC_INTENT_FILTER);
     }
 
     @Override
     protected void onPause() {
-        unregisterReceiver(mSyncBroadcastReceiver);
+        //unregisterReceiver(mSyncBroadcastReceiver);
         super.onPause();
     };
-
-    private void showCurrentUserData() {
-        getSupportLoaderManager().initLoader(LOADER_USER, null, this);
-        SyncAdapter.syncCurrentUser();
-    }
 
     private void initLeftDrawer() {
         //mProgressBar = (ProgressBar) findViewById(R.id.progress_bar);
@@ -191,11 +185,19 @@ public class MainActivity extends ActionBarActivity
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
         switch (i) {
             case LOADER_USER:
+                for (DrawerItem item : mDrawerItems) {
+                    if (!(item instanceof DrawerGroupItem))
+                        mDrawerItems.remove(item);
+                }
                 return new CursorLoader(this,
                         User.URI.buildUpon()
                                 .appendPath(Integer.toString(SyncAdapter.getSession().getUserId()))
                                 .build(), User.PROJECTION, null, null, null);
             case LOADER_GROUPS:
+                for (DrawerItem item : mDrawerItems) {
+                    if (item instanceof DrawerGroupItem)
+                        mDrawerItems.remove(item);
+                }
                 return new CursorLoader(this,
                         Group.URI.buildUpon()
                                 .appendPath(User.PATH)
@@ -214,11 +216,9 @@ public class MainActivity extends ActionBarActivity
                     User user = new User(cursor);
                     mDrawerItems.add(new DrawerUserItem(user));
                     mDrawerItems.add(new DrawerTitleItem(getResources().getString(R.string.groups)));
-                    FragmentManager fm = getSupportFragmentManager();
-                    HomeFragment homeFragment = (HomeFragment) fm.findFragmentById(R.id.content);
-                    homeFragment.setUser(user);
+                    HomeFragment fragment = (HomeFragment) getSupportFragmentManager().findFragmentByTag(HomeFragment.TAG);
+                    fragment.setUser(user);
                     getSupportLoaderManager().initLoader(LOADER_GROUPS, null, this);
-                    SyncAdapter.syncCurrentUserGroups();
                 }
                 getSupportLoaderManager().destroyLoader(LOADER_USER);
                 break;
@@ -227,6 +227,8 @@ public class MainActivity extends ActionBarActivity
                     mDrawerItems.add(new DrawerGroupItem(new Group(cursor)));
                 }
                 getSupportLoaderManager().destroyLoader(LOADER_GROUPS);
+                //SyncAdapter.syncCurrentUserData();
+                break;
         }
         ((DrawerListAdapter) mDrawerList.getAdapter()).notifyDataSetChanged();
     }
@@ -240,20 +242,34 @@ public class MainActivity extends ActionBarActivity
     private void showHomeFragment() {
         FragmentManager fm = getSupportFragmentManager();
         FragmentTransaction transaction = fm.beginTransaction();
-        Fragment fragment = fm.findFragmentById(R.id.content);
+        HomeFragment fragment = (HomeFragment) fm.findFragmentByTag(HomeFragment.TAG);
         if (fragment == null)
             fragment = new HomeFragment();
-        transaction.replace(R.id.content, fragment).commit();
+        transaction.replace(R.id.content, fragment, HomeFragment.TAG).commit();
     }
 
-    private BroadcastReceiver mSyncBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String dataType = intent.getStringExtra(SyncAdapter.ARG_DATA_TYPE);
-            if (dataType.equals(User.TABLE_NAME))
-                getSupportLoaderManager().initLoader(LOADER_USER, null, MainActivity.this);
-            else if (dataType.equals(Group.TABLE_NAME))
-                getSupportLoaderManager().initLoader(LOADER_GROUPS, null, MainActivity.this);
+//    private BroadcastReceiver mSyncBroadcastReceiver = new BroadcastReceiver() {
+//        @Override
+//        public void onReceive(Context context, Intent intent) {
+//            String dataType = intent.getStringExtra(SyncAdapter.ARG_DATA_TYPE);
+//            if (dataType.equals(User.TABLE_NAME))
+//                getSupportLoaderManager().initLoader(LOADER_USER, null, MainActivity.this);
+//            else if (dataType.equals(Group.TABLE_NAME))
+//                getSupportLoaderManager().initLoader(LOADER_GROUPS, null, MainActivity.this);
+//        }
+//    };
+
+    @Override
+    public void onBackPressed() {
+        boolean popped = false;
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment contentFragment = fm.findFragmentById(R.id.content);
+        if (contentFragment != null) {
+            FragmentManager contentFm = contentFragment.getChildFragmentManager();
+            if (contentFragment instanceof HomeFragment)
+                popped = ((HomeFragment) contentFragment).onBackPressed();
         }
-    };
+        if (!popped)
+            super.onBackPressed();
+    }
 }

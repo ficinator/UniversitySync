@@ -11,7 +11,8 @@
         android:layout_height="wrap_content"
         android:layout_marginRight="@dimen/item_padding"
         android:layout_marginEnd="@dimen/item_padding"
-        android:layout_centerVertical="true"/>
+        android:layout_centerVertical="true"
+        android:visibility="gone"/>
 
     <RelativeLayout android:id="@+id/header"
         android:layout_width="match_parent"
@@ -19,32 +20,49 @@
         android:layout_toRightOf="@+id/checkbox"
         android:layout_toEndOf="@+id/checkbox">
 
-        <TextView android:id="@+id/title"
-            android:layout_width="wrap_content"
+        <LinearLayout android:id="@id/header"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="@dimen/drawer_item_title_font_size"
             android:layout_alignParentLeft="true"
-            android:layout_alignParentStart="true"
-            android:singleLine="true"
-            android:text="Title"/>
+            android:layout_alignParentStart="true">
+
+            <TextView android:id="@+id/id"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/font_size_big"
+                android:singleLine="true"
+                android:layout_marginRight="@dimen/item_padding"
+                android:layout_marginEnd="@dimen/item_padding"
+                android:text="Id"/>
+
+            <TextView android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/font_size_big"
+                android:singleLine="true"
+                android:text="Title"/>
+        </LinearLayout>
 
         <TextView android:id="@+id/date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@+id/title"
+            android:layout_below="@+id/header"
             android:layout_alignParentLeft="true"
             android:layout_alignParentStart="true"
-            android:textSize="@dimen/drawer_item_subtitle_font_size"
+            android:textSize="@dimen/font_size_small"
             android:singleLine="true"
-            android:text="31. 12. 2013"/>
+            android:text="Date"/>
 
     </RelativeLayout>
 
-    <!--<TextView android:id="@+id/content"-->
-        <!--android:layout_width="wrap_content"-->
-        <!--android:layout_height="wrap_content"-->
-        <!--android:layout_toRightOf="@+id/checkbox"-->
-        <!--android:layout_below="@id/header"-->
-        <!--android:text="Poznamocka ako lusk!"/>-->
+    <TextView android:id="@+id/content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@+id/checkbox"
+        android:layout_toEndOf="@+id/checkbox"
+        android:layout_below="@id/header"
+        android:layout_marginTop="@dimen/item_padding"
+        android:text="Content"
+        android:visibility="gone" />
 
 </RelativeLayout>

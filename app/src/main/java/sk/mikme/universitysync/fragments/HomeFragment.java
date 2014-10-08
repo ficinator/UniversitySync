@@ -9,25 +9,24 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.viewpagerindicator.TabPageIndicator;
 
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.adapters.HomePagerAdapter;
 import sk.mikme.universitysync.provider.User;
-import sk.mikme.universitysync.sync.SyncAdapter;
+
 
 /**
  * Created by fic on 20.9.2014.
  */
 public class HomeFragment extends Fragment {
-
-    //private static final String[] TAB_TITLES = { "Notes", "Articles", "Files" };
+    public static final String TAG = "homeFragment";
 
     //private FragmentListener mListener;
 
     private ViewPager mHomePager;
     private HomePagerAdapter mHomePagerAdapter;
+    private TabPageIndicator mTabIndicator;
     private User mUser;
 
     public static HomeFragment newInstance(User user) {
@@ -40,8 +39,8 @@ public class HomeFragment extends Fragment {
 
     public void setUser(User user) {
         mUser = user;
-        NoteListFragment fragment = (NoteListFragment) mHomePagerAdapter.getItem(0);
-        fragment.setSelectionArgs(user);
+        NotesFragment notesFragment = (NotesFragment) mHomePagerAdapter.getItem(0);
+        notesFragment.setSelectionArgs(mUser);
     }
 
     @Override
@@ -59,9 +58,9 @@ public class HomeFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            //mUser = getArguments().getParcelable(User.TABLE_NAME);
-        }
+//        if (getArguments() != null) {
+//            mUser = getArguments().getParcelable(User.TABLE_NAME);
+//        }
     }
 
     @Override
@@ -71,8 +70,10 @@ public class HomeFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
 
         mHomePager = (ViewPager) view.findViewById(R.id.home_pager);
-        mHomePagerAdapter = new HomePagerAdapter(getChildFragmentManager());
+        mHomePagerAdapter = new HomePagerAdapter(getChildFragmentManager(), mUser);
         mHomePager.setAdapter(mHomePagerAdapter);
+        mTabIndicator = (TabPageIndicator) view.findViewById(R.id.titles);
+        mTabIndicator.setViewPager(mHomePager);
 
         return view;
     }
@@ -82,5 +83,13 @@ public class HomeFragment extends Fragment {
         super.onDetach();
         //mListener.onHideTabs();
         //mListener = null;
+    }
+
+    public boolean onBackPressed() {
+        boolean popped = false;
+        Fragment fragment = mHomePagerAdapter.getItem(mHomePager.getCurrentItem());
+        if (fragment instanceof NotesFragment)
+            popped = ((NotesFragment) fragment).onBackPressed();
+        return popped;
     }
 }
