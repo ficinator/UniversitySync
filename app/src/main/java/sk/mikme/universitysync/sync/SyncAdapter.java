@@ -201,14 +201,11 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
                 if (details != null)
                     note.setDetails(details);
             }
-            // get keywords from database
-            Cursor cKeywords = mContentResolver.query(Keyword.URI, Keyword.PROJECTION, null, null, null);
             // get notes from database
             Cursor cNotes = contentResolver.query(notesUri, Note.PROJECTION, null, null, null);
             // find new items
-            syncResult = updateKeywords(notes, cKeywords, syncResult);
             syncResult = updateNotes(notes, cNotes, syncResult);
-
+            syncResult = updateKeywords(notes, syncResult);
             syncResult = updateNoteKeywords(notes, syncResult);
 
             intent.putExtra(ARG_DATA_TYPE, Note.TABLE_NAME);
@@ -305,26 +302,14 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
         SparseArray<Note> oldNotes = new SparseArray<Note>();
         while (c.moveToNext()) {
-            int id = c.getInt(Note.COLUMN_ID);
             Note note = new Note(c);
             syncResult.stats.numEntries++;
             Note match = notes.get(Integer.toString(note.getNoteId()));
             if (match != null) {
                 oldNotes.put(note.getNoteId(), note);
-                Uri existingUri = Note.URI.buildUpon()
-                        .appendPath(Integer.toString(id)).build();
-                // if remote version is newer than local one
+                match.setId(note.getId());
                 if (match.getDate() > note.getDate()) {
-                    // update existing record
-                    batch.add(ContentProviderOperation.newUpdate(existingUri)
-                            .withValue(Note.COLUMN_NAME_NOTE_ID, match.getNoteId())
-                            .withValue(Note.COLUMN_NAME_USER_ID, match.getUserId())
-                            .withValue(Note.COLUMN_NAME_GROUP_ID, match.getGroupId())
-                            .withValue(Note.COLUMN_NAME_TITLE, match.getTitle())
-                            .withValue(Note.COLUMN_NAME_LIKES, match.getLikes())
-                            .withValue(Note.COLUMN_NAME_DATE, match.getDate())
-                            .withValue(Note.COLUMN_NAME_CONTENT, match.getContent())
-                            .build());
+                    match.update(getContext());
                     syncResult.stats.numUpdates++;
                 }
             }
@@ -334,101 +319,28 @@ public class SyncAdapter extends AbstractThreadedSyncAdapter {
         // Add new notes
         for (Note note : notes.values()) {
             if (oldNotes.get(note.getNoteId()) == null) {
-                batch.add(ContentProviderOperation.newInsert(Note.URI)
-                        .withValue(Note.COLUMN_NAME_NOTE_ID, note.getNoteId())
-                        .withValue(Note.COLUMN_NAME_USER_ID, note.getUserId())
-                        .withValue(Note.COLUMN_NAME_GROUP_ID, note.getGroupId())
-                        .withValue(Note.COLUMN_NAME_TITLE, note.getTitle())
-                        .withValue(Note.COLUMN_NAME_LIKES, note.getLikes())
-                        .withValue(Note.COLUMN_NAME_DATE, note.getDate())
-                        .withValue(Note.COLUMN_NAME_CONTENT, note.getContent())
-                        .build());
+                note.setId(note.insert(getContext()));
                 syncResult.stats.numInserts++;
             }
         }
-        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
-        mContentResolver.notifyChange(Note.URI, null, false);
         return syncResult;
     }
 
-    private SyncResult updateKeywords(HashMap<String, Note> notes, Cursor c, SyncResult syncResult)
+    private SyncResult updateKeywords(HashMap<String, Note> notes, SyncResult syncResult)
         throws RemoteException, OperationApplicationException {
-        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
-        HashMap<String, String> newKeywords = new HashMap<String, String>();
-
         for (Note note : notes.values()) {
-            for (String keyword : note.getKeywords()) {
-                boolean newKeyword = true;
-                c.moveToPosition(-1);
-                while (c.moveToNext() && newKeyword) {
-                    Keyword oldKeyword = new Keyword(c);
-                    if (oldKeyword.getName().equals(keyword))
-                        newKeyword = false;
-                }
-                if (newKeyword) {
-                    if (!newKeywords.containsKey(keyword))
-                        newKeywords.put(keyword, keyword);
-                }
+            for (Keyword keyword : note.getKeywords()) {
+                keyword.setId(keyword.insert(getContext()));
+                syncResult.stats.numUpdates++;
             }
         }
-        c.close();
-
-        for (String keyword : newKeywords.values()) {
-            batch.add(ContentProviderOperation.newInsert(Keyword.URI)
-                    .withValue(Keyword.COLUMN_NAME_NAME, keyword).build());
-        }
-
-        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
-        mContentResolver.notifyChange(Keyword.URI, null, false);
-
         return syncResult;
     }
 
     private SyncResult updateNoteKeywords(HashMap<String, Note> notes, SyncResult syncResult)
             throws RemoteException, OperationApplicationException {
-        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
-        for (Note note : notes.values()) {
-            Cursor cNoteKeywords = mContentResolver.query(
-                    NoteKeyword.URI.buildUpon()
-                            .appendPath(Note.PATH)
-                            .appendPath(Integer.toString(note.getNoteId()))
-                            .build(),
-                    NoteKeyword.PROJECTION, null, null, null);
-            HashMap<String, String> oldKeywords = new HashMap<String, String>();
-            while (cNoteKeywords.moveToNext()) {
-                NoteKeyword noteKeyword = new NoteKeyword(cNoteKeywords);
-                boolean hasKeyword = false;
-                for (String keyword : note.getKeywords()) {
-                    if (keyword.equals(noteKeyword.getKeyword().getName())) {
-                        oldKeywords.put(keyword, keyword);
-                        hasKeyword = true;
-                    }
-                }
-                if (!hasKeyword) {
-                    // delete this record from db
-                }
-            }
-            cNoteKeywords.close();
-
-            for (String keyword : note.getKeywords()) {
-                if (!oldKeywords.containsKey(keyword)) {
-                    Cursor cKeyword = mContentResolver.query(
-                            Keyword.URI.buildUpon().appendPath(keyword).build(),
-                            Keyword.PROJECTION, null, null, null);
-                    if (cKeyword.moveToFirst()) {
-                        Keyword kwMatch = new Keyword(cKeyword);
-                        batch.add(ContentProviderOperation.newInsert(NoteKeyword.URI)
-                                .withValue(NoteKeyword.COLUMN_NAME_NOTE_ID, note.getNoteId())
-                                .withValue(NoteKeyword.COLUMN_NAME_KEYWORD_ID, kwMatch.getId())
-                                .build());
-                    }
-                    cKeyword.close();
-                }
-            }
-        }
-
-        mContentResolver.applyBatch(Provider.AUTHORITY, batch);
-        mContentResolver.notifyChange(NoteKeyword.URI, null, false);
+        for (Note note : notes.values())
+            syncResult.stats.numUpdates += NoteKeyword.update(getContext(), note);
 
         return syncResult;
     }

@@ -15,6 +15,28 @@
     <string name="error_invalid_email">Invalid email</string>
     <string name="refresh">Refresh</string>
     <string name="groups">Groups</string>
-    <string name="keywords">Keywords:</string>
+    <string name="keywords">Keywords</string>
+    <string name="title">Title</string>
+    <string name="content">Content</string>
+    <string name="save">Save</string>
+    <string name="add">Add</string>
+    <string name="add_note_succ">Note \"%s\" successfully created.</string>
+    <string name="add_note_err">Note \"%s\" couldn\'t be created. Please, try again.</string>
+    <string name="add_keyword">Add Keyword</string>
+    <string name="references">References</string>
+    <string name="add_reference">Add Reference</string>
+    <string name="edit_string">Edit \"%s\"</string>
+    <string name="delete_string">Delete \"%s\"</string>
+    <string name="update_note_succ">Note \"%s\" successfully updated.</string>
+    <string name="update_note_err">Note \"%s\" couldn\'t be updated. Please, try again.</string>
+    <string name="placeholder">Text</string>
+    <string name="delete_note_succ">Note \"%s\" successfully deleted.</string>
+    <string name="delete_note_err">Note \"%s\" couldn\'t be deleted. Please, try again.</string>
+    <string name="delete_note_sure">Do you want to delete this note?</string>
+    <string name="ok">OK</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="add_new">New</string>
+    <string name="new_note">Create New Note</string>
 
 </resources>

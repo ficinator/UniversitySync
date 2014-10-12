@@ -1,9 +1,18 @@
 package sk.mikme.universitysync.provider;
 
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentResolver;
+import android.content.Context;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.RemoteException;
 import android.provider.BaseColumns;
+import android.util.SparseArray;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Created by fic on 7.10.2014.
@@ -40,6 +49,10 @@ public class NoteKeyword implements BaseColumns {
         mKeyword = new Keyword(c.getInt(COLUMN_KEYWORD_ID), c.getString(COLUMN_KEYWORD_NAME));
     }
 
+    public int getId() {
+        return mId;
+    }
+
     public int getNoteId() {
         return mNoteId;
     }
@@ -54,5 +67,50 @@ public class NoteKeyword implements BaseColumns {
 
     public void setKeyword(Keyword mKeyword) {
         this.mKeyword = mKeyword;
+    }
+
+    public static int update(Context context, Note note)
+            throws RemoteException, OperationApplicationException {
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        ContentResolver contentResolver = context.getContentResolver();
+        ContentProviderResult[] result;
+        Cursor c = contentResolver.query(
+                NoteKeyword.URI.buildUpon()
+                        .appendPath(Note.PATH)
+                        .appendPath(Integer.toString(note.getId()))
+                        .build(),
+                NoteKeyword.PROJECTION, null, null, null);
+        SparseArray<String> oldKeywords = new SparseArray<String>();
+        while (c.moveToNext()) {
+            NoteKeyword noteKeyword = new NoteKeyword(c);
+            boolean hasKeyword = false;
+            for (Keyword keyword : note.getKeywords()) {
+                if (keyword.getId() == noteKeyword.getKeyword().getId()) {
+                    oldKeywords.put(keyword.getId(), keyword.getName());
+                    hasKeyword = true;
+                    break;
+                }
+            }
+            if (!hasKeyword) {
+                batch.add(ContentProviderOperation.newDelete(
+                        NoteKeyword.URI.buildUpon()
+                            .appendPath(Integer.toString(noteKeyword.getId()))
+                            .build())
+                        .build());
+            }
+        }
+        c.close();
+
+        for (Keyword keyword : note.getKeywords()) {
+            if (oldKeywords.get(keyword.getId()) == null) {
+                batch.add(ContentProviderOperation.newInsert(NoteKeyword.URI)
+                        .withValue(NoteKeyword.COLUMN_NAME_NOTE_ID, note.getId())
+                        .withValue(NoteKeyword.COLUMN_NAME_KEYWORD_ID, keyword.getId())
+                        .build());
+            }
+        }
+        result = contentResolver.applyBatch(Provider.AUTHORITY, batch);
+        contentResolver.notifyChange(NoteKeyword.URI, null, false);
+        return result.length;
     }
 }

@@ -2,6 +2,7 @@ package sk.mikme.universitysync.fragments;
 
 import android.accounts.Account;
 import android.annotation.TargetApi;
+import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.SyncStatusObserver;
 import android.database.Cursor;
@@ -9,6 +10,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.app.ListFragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
@@ -51,6 +55,7 @@ public class NoteListFragment extends ListFragment
             R.id.content
     };
     private static final String SELECTION = "selection";
+    public static final String TAG = "noteListFragment";
 
     private SimpleCursorAdapter mAdapter;
     private Menu mOptionsMenu;
@@ -74,7 +79,6 @@ public class NoteListFragment extends ListFragment
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
         if (getArguments() != null) {
             mSelectionArgs = getArguments().getParcelable(SELECTION);
         }
@@ -172,28 +176,14 @@ public class NoteListFragment extends ListFragment
         mAdapter.changeCursor(null);
     }
 
-    /**
-     * Create the ActionBar.
-     */
-    @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        super.onCreateOptionsMenu(menu, inflater);
-        mOptionsMenu = menu;
-        inflater.inflate(R.menu.main, menu);
-    }
-
-    /**
-     * Respond to user gestures on the ActionBar.
-     */
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            // If the user clicks the "Refresh" button.
-            case R.id.menu_sync:
-                SyncAdapter.syncCurrentUserNotes();
-                return true;
+    public void showNoteManageFragment() {
+        FragmentManager fm = getActivity().getSupportFragmentManager();
+        if (fm.findFragmentByTag(TAG) == null) {
+            NoteManageFragment fragment = new NoteManageFragment();
+            FragmentTransaction transaction = fm.beginTransaction();
+            transaction.addToBackStack(TAG);
+            fragment.show(transaction, TAG);
         }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -204,7 +194,7 @@ public class NoteListFragment extends ListFragment
         if (c != null) {
             Note note = new Note(c);
             NotesFragment parentFragment = (NotesFragment) getParentFragment();
-            parentFragment.setDetailFragment(NoteDetailFragment.newInstance(note));
+            parentFragment.setDetailFragment(NoteDetailFragment.newInstance(note.getId()));
         }
     }
 
@@ -220,7 +210,7 @@ public class NoteListFragment extends ListFragment
             return;
         }
 
-        final MenuItem syncItem = mOptionsMenu.findItem(R.id.menu_sync);
+        final MenuItem syncItem = mOptionsMenu.findItem(R.id.sync);
         if (syncItem != null) {
             if (syncing) {
                 syncItem.setActionView(R.layout.actionbar_sync_progress);

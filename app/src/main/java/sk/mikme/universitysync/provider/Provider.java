@@ -2,6 +2,7 @@ package sk.mikme.universitysync.provider;
 
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -16,6 +17,8 @@ import android.provider.BaseColumns;
 
 import java.security.Key;
 import java.util.ArrayList;
+
+import sk.mikme.universitysync.sync.SyncAdapter;
 
 /**
  * Created by fic on 17.9.2014.
@@ -164,7 +167,9 @@ public class Provider extends ContentProvider {
             case ROUTE_GROUPS_USERS_ID:
                 builder.table(Member.TABLE_NAME + " JOIN " + Group.TABLE_NAME+ " ON "
                         + Member.TABLE_NAME + "." + Member.COLUMN_NAME_GROUP_ID + "="
-                        + Group.TABLE_NAME + "." + Group.COLUMN_NAME_GROUP_ID);
+                        + Group.TABLE_NAME + "." + Group.COLUMN_NAME_GROUP_ID)
+                        .mapToTable(Group._ID, Group.TABLE_NAME)
+                        .mapToTable(Group.COLUMN_NAME_GROUP_ID, Group.TABLE_NAME);
                 break;
             case ROUTE_USERS:
             case ROUTE_USERS_ID:
@@ -180,14 +185,15 @@ public class Provider extends ContentProvider {
             case ROUTE_KEYWORDS_NAME:
                 builder.table(Keyword.TABLE_NAME);
                 break;
-            case ROUTE_NOTE_KEYWORDS:
             case ROUTE_NOTE_KEYWORDS_ID:
                 builder.table(NoteKeyword.TABLE_NAME);
                 break;
+            case ROUTE_NOTE_KEYWORDS:
             case ROUTE_NOTE_KEYWORDS_NOTES_ID:
                 builder.table(NoteKeyword.TABLE_NAME + " JOIN " + Keyword.TABLE_NAME + " ON "
                         + NoteKeyword.TABLE_NAME + "." + NoteKeyword.COLUMN_NAME_KEYWORD_ID + "="
-                        + Keyword.TABLE_NAME + "." + Keyword._ID);
+                        + Keyword.TABLE_NAME + "." + Keyword._ID)
+                        .mapToTable(NoteKeyword._ID, NoteKeyword.TABLE_NAME);
                 break;
             default:
                 throw new UnsupportedOperationException("Unknown uri: " + uri);
@@ -195,7 +201,7 @@ public class Provider extends ContentProvider {
 
         switch (sUriMatcher.match(uri)) {
             case ROUTE_NOTES_ID:
-                builder.where(Note.COLUMN_NAME_NOTE_ID + "=?", id);
+                builder.where(Note._ID + "=?", id);
                 break;
             case ROUTE_NOTES_USERS_ID:
                 builder.where(Note.COLUMN_NAME_USER_ID + "=?", id);
@@ -204,9 +210,7 @@ public class Provider extends ContentProvider {
                 builder.where(Group._ID + "=?", id);
                 break;
             case ROUTE_GROUPS_USERS_ID:
-                builder.where(Member.COLUMN_NAME_USER_ID + "=?", id)
-                        .mapToTable(Group._ID, Group.TABLE_NAME)
-                        .mapToTable(Group.COLUMN_NAME_GROUP_ID, Group.TABLE_NAME);
+                builder.where(Member.COLUMN_NAME_USER_ID + "=?", id);
                 break;
             case ROUTE_USERS_ID:
                 builder.where(User.COLUMN_NAME_USER_ID + "=?", id);
@@ -224,8 +228,7 @@ public class Provider extends ContentProvider {
                 builder.where(NoteKeyword._ID + "=?", id);
                 break;
             case ROUTE_NOTE_KEYWORDS_NOTES_ID:
-                builder.where(Note.COLUMN_NAME_NOTE_ID + "=?", id)
-                        .mapToTable(Keyword._ID, Keyword.TABLE_NAME);
+                builder.where(Note.COLUMN_NAME_NOTE_ID + "=?", id);
                 break;
         }
 
@@ -318,10 +321,9 @@ public class Provider extends ContentProvider {
                       String[] selectionArgs) {
         SelectionBuilder builder = new SelectionBuilder();
         final SQLiteDatabase db = mDatabaseHelper.getWritableDatabase();
-        final int match = sUriMatcher.match(uri);
         int count;
         String id = uri.getLastPathSegment();
-        switch (match) {
+        switch (sUriMatcher.match(uri)) {
             case ROUTE_NOTES:
                 count = builder.table(Note.TABLE_NAME)
                         .where(selection, selectionArgs)
@@ -508,21 +510,19 @@ public class Provider extends ContentProvider {
         /** Filename for SQLite file. */
         public static final String DATABASE_NAME = "universitysync.db";
 
-        private static final String TYPE_TEXT = " TEXT";
-        private static final String TYPE_INTEGER = " INTEGER";
-        private static final String COMMA_SEP = ",";
+        private static final String SQL_ALLOW_FK = "PRAGMA foreign_keys=ON;";
 
         /** SQL statement to create "user" table. */
         private static final String SQL_CREATE_USERS =
                 "CREATE TABLE " + User.TABLE_NAME + " (" +
                         User._ID + " INTEGER PRIMARY KEY," +
-                        User.COLUMN_NAME_USER_ID + TYPE_INTEGER + COMMA_SEP +
-                        User.COLUMN_NAME_NAME + TYPE_TEXT + COMMA_SEP +
-                        User.COLUMN_NAME_SURNAME + TYPE_TEXT + COMMA_SEP +
-                        User.COLUMN_NAME_EMAIL + TYPE_TEXT + COMMA_SEP +
-                        User.COLUMN_NAME_UNIVERSITY + TYPE_TEXT + COMMA_SEP +
-                        User.COLUMN_NAME_INFO + TYPE_TEXT + COMMA_SEP +
-                        User.COLUMN_NAME_RANK + TYPE_INTEGER + ")";
+                        User.COLUMN_NAME_USER_ID + " INTEGER," +
+                        User.COLUMN_NAME_NAME + " TEXT," +
+                        User.COLUMN_NAME_SURNAME + " TEXT," +
+                        User.COLUMN_NAME_EMAIL + " TEXT," +
+                        User.COLUMN_NAME_UNIVERSITY + " TEXT," +
+                        User.COLUMN_NAME_INFO + " TEXT," +
+                        User.COLUMN_NAME_RANK + " INTEGER)";
 
         /** SQL statement to drop "user" table. */
         private static final String SQL_DELETE_USERS =
@@ -532,12 +532,12 @@ public class Provider extends ContentProvider {
         private static final String SQL_CREATE_GROUPS =
                 "CREATE TABLE " + Group.TABLE_NAME + " (" +
                         Group._ID + " INTEGER PRIMARY KEY," +
-                        Group.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
-                        Group.COLUMN_NAME_NAME + TYPE_TEXT + COMMA_SEP +
-                        Group.COLUMN_NAME_UNIVERSITY + TYPE_TEXT + COMMA_SEP +
-                        Group.COLUMN_NAME_INFO + TYPE_TEXT + COMMA_SEP +
-                        Group.COLUMN_NAME_PUBLIC + TYPE_INTEGER + COMMA_SEP +
-                        Group.COLUMN_NAME_MEMBER_INFO + TYPE_TEXT + ")";
+                        Group.COLUMN_NAME_GROUP_ID + " INTEGER," +
+                        Group.COLUMN_NAME_NAME + " TEXT," +
+                        Group.COLUMN_NAME_UNIVERSITY + " TEXT," +
+                        Group.COLUMN_NAME_INFO + " TEXT," +
+                        Group.COLUMN_NAME_PUBLIC + " INTEGER," +
+                        Group.COLUMN_NAME_MEMBER_INFO + " TEXT)";
 
         /** SQL statement to drop "group" table. */
         private static final String SQL_DELETE_GROUPS =
@@ -546,10 +546,12 @@ public class Provider extends ContentProvider {
         /** SQL statement to create "member" table. */
         private static final String SQL_CREATE_MEMBERS =
                 "CREATE TABLE " + Member.TABLE_NAME + " (" +
-                        Member._ID + TYPE_INTEGER + " PRIMARY KEY" + COMMA_SEP +
-                        Member.COLUMN_NAME_USER_ID + TYPE_INTEGER + COMMA_SEP +
-                        Member.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
-                        Member.COLUMN_NAME_ADMIN + TYPE_INTEGER + ")";
+                        Member._ID + " INTEGER PRIMARY KEY," +
+                        Member.COLUMN_NAME_USER_ID + " INTEGER" +
+                        " REFERENCES " + User.TABLE_NAME + "(" + User._ID + ") ON DELETE CASCADE," +
+                        Member.COLUMN_NAME_GROUP_ID + " INTEGER" +
+                        " REFERENCES " + Group.TABLE_NAME + "(" + Group._ID + ") ON DELETE CASCADE," +
+                        Member.COLUMN_NAME_ADMIN + " INTEGER)";
 
         /** SQL statement to drop "member" table. */
         private static final String SQL_DELETE_MEMBERS =
@@ -559,13 +561,15 @@ public class Provider extends ContentProvider {
         private static final String SQL_CREATE_NOTES =
                 "CREATE TABLE " + Note.TABLE_NAME + " (" +
                         Note._ID + " INTEGER PRIMARY KEY," +
-                        Note.COLUMN_NAME_NOTE_ID + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_USER_ID + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_GROUP_ID + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_TITLE + TYPE_TEXT + COMMA_SEP +
-                        Note.COLUMN_NAME_LIKES + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_DATE + TYPE_INTEGER + COMMA_SEP +
-                        Note.COLUMN_NAME_CONTENT + TYPE_TEXT + ")";
+                        Note.COLUMN_NAME_NOTE_ID + " INTEGER," +
+                        Note.COLUMN_NAME_USER_ID + " INTEGER" +
+                        " REFERENCES " + User.TABLE_NAME + "(" + User._ID + ") ON DELETE SET NULL," +
+                        Note.COLUMN_NAME_GROUP_ID + " INTEGER" +
+                        " REFERENCES " + Group.TABLE_NAME + "(" + Group._ID + ") ON DELETE CASCADE," +
+                        Note.COLUMN_NAME_TITLE + " TEXT," +
+                        Note.COLUMN_NAME_LIKES + " INTEGER," +
+                        Note.COLUMN_NAME_DATE + " INTEGER," +
+                        Note.COLUMN_NAME_CONTENT + " TEXT)";
 
         /** SQL statement to drop "note" table. */
         private static final String SQL_DELETE_NOTES =
@@ -574,8 +578,8 @@ public class Provider extends ContentProvider {
         /** SQL statement to create "keyword" table. */
         private static final String SQL_CREATE_KEYWORDS =
                 "CREATE TABLE " + Keyword.TABLE_NAME + " (" +
-                        Keyword._ID + TYPE_INTEGER + " PRIMARY KEY" + COMMA_SEP +
-                        Keyword.COLUMN_NAME_NAME + TYPE_TEXT + ")";
+                        Keyword._ID + " INTEGER PRIMARY KEY," +
+                        Keyword.COLUMN_NAME_NAME + " TEXT)";
 
         /** SQL statement to drop "keyword" table. */
         private static final String SQL_DELETE_KEYWORDS =
@@ -584,9 +588,11 @@ public class Provider extends ContentProvider {
         /** SQL statement to create "note_keyword" table. */
         private static final String SQL_CREATE_NOTE_KEYWORDS =
                 "CREATE TABLE " + NoteKeyword.TABLE_NAME + " (" +
-                        NoteKeyword._ID + TYPE_INTEGER + " PRIMARY_KEY" + COMMA_SEP +
-                        NoteKeyword.COLUMN_NAME_NOTE_ID + TYPE_INTEGER + COMMA_SEP +
-                        NoteKeyword.COLUMN_NAME_KEYWORD_ID + TYPE_INTEGER + ")";
+                        NoteKeyword._ID + " INTEGER PRIMARY KEY," +
+                        NoteKeyword.COLUMN_NAME_NOTE_ID + " INTEGER" +
+                        " REFERENCES " + Note.TABLE_NAME + "(" + Note._ID + ") ON DELETE CASCADE," +
+                        NoteKeyword.COLUMN_NAME_KEYWORD_ID + " INTEGER" +
+                        " REFERENCES " + Keyword.TABLE_NAME + "(" + Keyword._ID + ") ON DELETE CASCADE)";
 
         /** SQL statement to drop "keyword" table. */
         private static final String SQL_DELETE_NOTE_KEYWORDS =
@@ -598,6 +604,7 @@ public class Provider extends ContentProvider {
 
         @Override
         public void onCreate(SQLiteDatabase db) {
+            db.execSQL(SQL_ALLOW_FK);
             db.execSQL(SQL_CREATE_USERS);
             db.execSQL(SQL_CREATE_GROUPS);
             db.execSQL(SQL_CREATE_MEMBERS);
@@ -614,8 +621,8 @@ public class Provider extends ContentProvider {
             db.execSQL(SQL_DELETE_NOTES);
             db.execSQL(SQL_DELETE_KEYWORDS);
             db.execSQL(SQL_DELETE_MEMBERS);
-            db.execSQL(SQL_DELETE_USERS);
             db.execSQL(SQL_DELETE_GROUPS);
+            db.execSQL(SQL_DELETE_USERS);
             onCreate(db);
         }
     }

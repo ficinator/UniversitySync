@@ -3,6 +3,7 @@ package sk.mikme.universitysync.activities;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.os.Bundle;
@@ -14,8 +15,8 @@ import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
-import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -49,6 +50,7 @@ public class MainActivity extends ActionBarActivity
     private ListView mDrawerList;
     private List<DrawerItem> mDrawerItems;
     private ActionBarDrawerToggle mDrawerToggle;
+    private String mContentTitle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,15 +102,19 @@ public class MainActivity extends ActionBarActivity
             /** Called when a drawer has settled in a completely closed state. */
             public void onDrawerClosed(View view) {
                 super.onDrawerClosed(view);
-                setTitle("Oh Shit");
-                supportInvalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
+                setTitle(mContentTitle);
+                supportInvalidateOptionsMenu();
+                if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)
+                    getSupportActionBar().setNavigationMode(ActionBar.NAVIGATION_MODE_LIST);
             }
 
             /** Called when a drawer has settled in a completely open state. */
             public void onDrawerOpened(View drawerView) {
                 super.onDrawerOpened(drawerView);
                 setTitle(R.string.app_name);
-                supportInvalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
+                supportInvalidateOptionsMenu();
+                if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)
+                    getSupportActionBar().setNavigationMode(ActionBar.NAVIGATION_MODE_STANDARD);
             }
         };
         // Set the drawer toggle as the DrawerListener
@@ -124,21 +130,28 @@ public class MainActivity extends ActionBarActivity
         getSupportActionBar().setTitle(title);
     }
 
+    public void setContentTitle(String contentTitle) {
+        setTitle(contentTitle);
+        mContentTitle = contentTitle;
+    }
+
     /* Called whenever we call invalidateOptionsMenu() */
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
         // If the nav drawer is open, hide action items related to the content view
         boolean drawerOpen = mDrawerLayout.isDrawerOpen(mDrawerList);
-        MenuItem syncItem = menu.findItem(R.id.menu_sync);
-        if (syncItem != null)
-            syncItem.setVisible(!drawerOpen);
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem menuItem = menu.getItem(i);
+            if (menuItem != null)
+                menuItem.setVisible(!drawerOpen);
+        }
         return super.onPrepareOptionsMenu(menu);
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        //getMenuInflater().inflate(R.menu.main, menu);
+        //getMenuInflater().inflate(R.menu.notes, menu);
         return true;
     }
 
@@ -244,8 +257,7 @@ public class MainActivity extends ActionBarActivity
         FragmentTransaction transaction = fm.beginTransaction();
         HomeFragment fragment = (HomeFragment) fm.findFragmentByTag(HomeFragment.TAG);
         if (fragment == null)
-            fragment = new HomeFragment();
-        transaction.replace(R.id.content, fragment, HomeFragment.TAG).commit();
+            transaction.replace(R.id.content, new HomeFragment(), HomeFragment.TAG).commit();
     }
 
 //    private BroadcastReceiver mSyncBroadcastReceiver = new BroadcastReceiver() {

@@ -1,9 +1,16 @@
 package sk.mikme.universitysync.fragments;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.os.RemoteException;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
@@ -15,6 +22,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.provider.Keyword;
@@ -27,18 +35,22 @@ import sk.mikme.universitysync.provider.NoteKeyword;
 public class NoteDetailFragment extends Fragment
         implements LoaderManager.LoaderCallbacks<Cursor>  {
 
-    private static final String ARG_NOTE = "note";
-    public static final String TAG = "noteFragment";
-    private static final int LOADER_KEYWORDS = 0;
-    private static final int LOADER_REFERENCES = 1;
+    public static final String ARG_NOTE_ID = "note_id";
+    public static final String TAG = "noteDetailFragment";
+    private static final int LOADER_NOTE = 0;
+    private static final int LOADER_KEYWORDS = 1;
+    private static final int LOADER_REFERENCES = 2;
 
+    private int mNoteId;
     private Note mNote;
+    private TextView mTitleView;
+    private TextView mContentView;
     private TextView mKeywordsView;
 
-    public static NoteDetailFragment newInstance(Note note) {
+    public static NoteDetailFragment newInstance(int noteId) {
         NoteDetailFragment fragment = new NoteDetailFragment();
         Bundle args = new Bundle();
-        args.putParcelable(ARG_NOTE, note);
+        args.putInt(ARG_NOTE_ID, noteId);
         fragment.setArguments(args);
         return fragment;
     }
@@ -55,10 +67,9 @@ public class NoteDetailFragment extends Fragment
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        //setHasOptionsMenu(true);
 
         if (getArguments() != null) {
-            mNote = getArguments().getParcelable(ARG_NOTE);
+            mNoteId = getArguments().getInt(ARG_NOTE_ID);
         }
     }
 
@@ -68,16 +79,11 @@ public class NoteDetailFragment extends Fragment
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_note_detail, container, false);
 
-        TextView idView = (TextView) view.findViewById(R.id.id);
-        TextView titleView = (TextView) view.findViewById(R.id.title);
-        TextView contentView = (TextView) view.findViewById(R.id.content);
-
-        idView.setText(Integer.toString(mNote.getNoteId()));
-        titleView.setText(mNote.getTitle());
-        contentView.setText(Html.fromHtml(mNote.getContent()));
-
+        mTitleView = (TextView) view.findViewById(R.id.title);
+        mContentView = (TextView) view.findViewById(R.id.content);
         mKeywordsView = (TextView) view.findViewById(R.id.keywords);
-        getLoaderManager().initLoader(LOADER_KEYWORDS, null, this);
+
+        getLoaderManager().initLoader(LOADER_NOTE, null, this);
 
         return view;
     }
@@ -92,42 +98,28 @@ public class NoteDetailFragment extends Fragment
         super.onDetach();
     }
 
-    /**
-     * Create the ActionBar.
-     */
-    @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        super.onCreateOptionsMenu(menu, inflater);
-        //mOptionsMenu = menu;
-        //inflater.inflate(R.menu.main, menu);
-    }
-
-    /**
-     * Respond to user gestures on the ActionBar.
-     */
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-//        switch (item.getItemId()) {
-//            // If the user clicks the "Refresh" button.
-//            case R.id.menu_sync:
-//                //SyncAdapter.triggerRefresh(Group.TABLE_NAME);
-//                return true;
-//        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    public void setNote(Note note) {
-        this.mNote = note;
+    public void showNoteManageFragment() {
+        FragmentManager fm = getActivity().getSupportFragmentManager();
+        if (fm.findFragmentByTag(TAG) == null) {
+            NoteManageFragment fragment = NoteManageFragment.newInstance(mNote);
+            FragmentTransaction transaction = fm.beginTransaction();
+            transaction.addToBackStack(TAG);
+            fragment.show(transaction, TAG);
+        }
     }
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
         switch (i) {
+            case LOADER_NOTE:
+                return new CursorLoader(getActivity(),
+                        Note.URI.buildUpon().appendPath(Integer.toString(mNoteId)).build(),
+                        Note.PROJECTION, null, null, null);
             case LOADER_KEYWORDS:
                 return new CursorLoader(getActivity(),
                         NoteKeyword.URI.buildUpon()
                                 .appendPath(Note.PATH)
-                                .appendPath(Integer.toString(mNote.getNoteId()))
+                                .appendPath(Integer.toString(mNote.getId()))
                                 .build(),
                         NoteKeyword.PROJECTION, null, null, Keyword.COLUMN_NAME_NAME + " asc");
             case LOADER_REFERENCES:
@@ -139,11 +131,19 @@ public class NoteDetailFragment extends Fragment
     @Override
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
         switch (cursorLoader.getId()) {
+            case LOADER_NOTE:
+                if (cursor.moveToFirst()) {
+                    mNote = new Note(cursor);
+                    mTitleView.setText(mNote.getTitle());
+                    mContentView.setText(Html.fromHtml(mNote.getContent()));
+                    getLoaderManager().initLoader(LOADER_KEYWORDS, null, this);
+                }
+                break;
             case LOADER_KEYWORDS:
                 mNote.getKeywords().clear();
                 cursor.moveToPosition(-1);
                 while (cursor.moveToNext())
-                    mNote.getKeywords().add(new NoteKeyword(cursor).getKeyword().getName());
+                    mNote.getKeywords().add(new NoteKeyword(cursor).getKeyword());
                 mKeywordsView.setText(mNote.getKeywordsString());
                 break;
             case LOADER_REFERENCES:
@@ -154,11 +154,45 @@ public class NoteDetailFragment extends Fragment
     @Override
     public void onLoaderReset(Loader<Cursor> cursorLoader) {
         switch (cursorLoader.getId()) {
+            case LOADER_NOTE:
+                mTitleView.setText("");
+                mContentView.setText("");
+                break;
             case LOADER_KEYWORDS:
                 mKeywordsView.setText("");
                 break;
             case LOADER_REFERENCES:
                 break;
         }
+    }
+
+    public void deleteNote() {
+        new AlertDialog.Builder(getActivity())
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .setTitle(getResources().getString(R.string.delete_string, mNote.getTitle()))
+                .setMessage(R.string.delete_note_sure)
+                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Activity activity = getActivity();
+                        try {
+                            mNote.delete(activity.getApplicationContext());
+                            ((NotesFragment) getParentFragment()).removeDetailFragment();
+                            Toast.makeText(activity.getApplicationContext(),
+                                    activity.getResources().getString(R.string.delete_note_succ, mNote.getTitle()),
+                                    Toast.LENGTH_SHORT).show();
+                        } catch (RemoteException e) {
+                            Toast.makeText(activity.getApplicationContext(),
+                                    activity.getResources().getString(R.string.delete_note_err, mNote.getTitle()),
+                                    Toast.LENGTH_SHORT).show();
+                        } catch (OperationApplicationException e) {
+                            Toast.makeText(activity.getApplicationContext(),
+                                    activity.getResources().getString(R.string.delete_note_err, mNote.getTitle()),
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 }

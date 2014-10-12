@@ -15,8 +15,6 @@ import android.view.View;
 
 import sk.mikme.universitysync.R;
 import sk.mikme.universitysync.provider.Group;
-import sk.mikme.universitysync.provider.Note;
-import sk.mikme.universitysync.sync.SyncAdapter;
 
 /**
  * Created by fic on 19.9.2014.
@@ -116,7 +114,7 @@ public class GroupListFragment extends ListFragment
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
         mOptionsMenu = menu;
-        inflater.inflate(R.menu.main, menu);
+        inflater.inflate(R.menu.notes, menu);
     }
 
     /**
@@ -126,7 +124,7 @@ public class GroupListFragment extends ListFragment
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             // If the user clicks the "Refresh" button.
-            case R.id.menu_sync:
+            case R.id.sync:
                 //SyncAdapter.triggerRefresh(Group.TABLE_NAME);
                 return true;
         }

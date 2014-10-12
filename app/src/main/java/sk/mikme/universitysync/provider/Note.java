@@ -1,10 +1,15 @@
 package sk.mikme.universitysync.provider;
 
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentResolver;
+import android.content.Context;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.os.RemoteException;
 import android.provider.BaseColumns;
 
 import org.json.JSONArray;
@@ -75,6 +80,7 @@ public class Note implements BaseColumns, Parcelable {
     public static final int COLUMN_DATE = 6;
     public static final int COLUMN_CONTENT = 7;
 
+    private int mId;
     private int mNoteId;
     private int mUserId;
     private int mGroupId;
@@ -82,9 +88,22 @@ public class Note implements BaseColumns, Parcelable {
     private int mLikes;
     private String mPath;
     private long mDate;
-    private List<String> mKeywords;
+    private List<Keyword> mKeywords;
     private List<String> mReferences;
     private String mContent;
+
+    public Note(int userId, int groupId, String title, String content,
+                List<Keyword> keywords, List<String> references) {
+        mNoteId = -1;
+        mUserId = userId;
+        mGroupId = groupId;
+        mTitle = title;
+        mLikes = 0;
+        mDate = new Date().getTime();
+        mKeywords = keywords;
+        mReferences = references;
+        mContent = content;
+    }
 
     public Note(JSONObject object) throws JSONException {
         mNoteId = object.getInt("id");
@@ -98,14 +117,15 @@ public class Note implements BaseColumns, Parcelable {
         } catch (ParseException e) {
             mDate = new Date().getTime();
         }
-        mKeywords = new ArrayList<String>();
+        mKeywords = new ArrayList<Keyword>();
         mReferences = new ArrayList<String>();
         mContent = "";
     }
 
     public Note(Parcel in) {
-        mKeywords = new ArrayList<String>();
+        mKeywords = new ArrayList<Keyword>();
         mReferences = new ArrayList<String>();
+        mId = in.readInt();
         mNoteId = in.readInt();
         mUserId = in.readInt();
         mGroupId = in.readInt();
@@ -113,21 +133,30 @@ public class Note implements BaseColumns, Parcelable {
         mLikes = in.readInt();
         mPath = in.readString();
         mDate = in.readLong();
-        in.readStringList(mKeywords);
+        in.readTypedList(mKeywords, Keyword.CREATOR);
         in.readStringList(mReferences);
         mContent = in.readString();
     }
 
     public Note(Cursor c) {
+        mId = c.getInt(COLUMN_ID);
         mNoteId = c.getInt(COLUMN_NOTE_ID);
         mUserId = c.getInt(COLUMN_USER_ID);
         mGroupId = c.getInt(COLUMN_GROUP_ID);
         mTitle = c.getString(COLUMN_TITLE);
         mLikes = c.getInt(COLUMN_LIKES);
         mDate = c.getLong(COLUMN_DATE);
-        mKeywords = new ArrayList<String>();
+        mKeywords = new ArrayList<Keyword>();
         mReferences = new ArrayList<String>();
         mContent = c.getString(COLUMN_CONTENT);
+    }
+
+    public int getId() {
+        return mId;
+    }
+
+    public void setId(int id) {
+        this.mId = id;
     }
 
     public int getUserId() {
@@ -193,12 +222,12 @@ public class Note implements BaseColumns, Parcelable {
     }
 
     public void setContent(String content) {
-        this.mPath = content;
+        this.mContent = content;
     }
 
-    public List<String> getKeywords() { return mKeywords; }
+    public List<Keyword> getKeywords() { return mKeywords; }
 
-    public void setKeywords(List<String> keywords) { mKeywords = keywords; }
+    public void setKeywords(List<Keyword> keywords) { mKeywords = keywords; }
 
     public List<String> getReferences() { return mReferences; }
 
@@ -211,6 +240,7 @@ public class Note implements BaseColumns, Parcelable {
 
     @Override
     public void writeToParcel(Parcel out, int flags) {
+        out.writeInt(mId);
         out.writeInt(mNoteId);
         out.writeInt(mUserId);
         out.writeInt(mGroupId);
@@ -220,7 +250,7 @@ public class Note implements BaseColumns, Parcelable {
         out.writeString(mPath);
         out.writeLong(mDate);
         //out.writeString(mCategory);
-        out.writeStringList(mKeywords);
+        out.writeTypedList(mKeywords);
         out.writeStringList(mReferences);
         out.writeString(mContent);
     }
@@ -240,7 +270,7 @@ public class Note implements BaseColumns, Parcelable {
             mKeywords.clear();
             JSONArray keywords = object.getJSONArray("KeyWords");
             for (int i = 0; i < keywords.length(); i++)
-                mKeywords.add(keywords.getString(i));
+                mKeywords.add(new Keyword(keywords.getString(i)));
 
             mReferences.clear();
             JSONArray references = object.getJSONArray("References");
@@ -259,9 +289,60 @@ public class Note implements BaseColumns, Parcelable {
         if (mKeywords.isEmpty())
             return "";
         String keywords = "";
-        for (String keyword : mKeywords)
-            keywords += keyword + ", ";
+        for (Keyword keyword : mKeywords)
+            keywords += keyword.getName() + ", ";
         return keywords.substring(0, keywords.length() - 2);
 
+    }
+
+    public int insert(Context context) throws RemoteException, OperationApplicationException {
+        ContentResolver resolver = context.getContentResolver();
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        ContentProviderResult[] result;
+        batch.add(ContentProviderOperation.newInsert(URI)
+                .withValue(Note.COLUMN_NAME_NOTE_ID, mNoteId)
+                .withValue(Note.COLUMN_NAME_USER_ID, mUserId)
+                .withValue(Note.COLUMN_NAME_GROUP_ID, mGroupId)
+                .withValue(Note.COLUMN_NAME_TITLE, mTitle)
+                .withValue(Note.COLUMN_NAME_LIKES, mLikes)
+                .withValue(Note.COLUMN_NAME_DATE, mDate)
+                .withValue(Note.COLUMN_NAME_CONTENT, mContent)
+                .build());
+        result = resolver.applyBatch(Provider.AUTHORITY, batch);
+        if (result.length > 0) {
+            resolver.notifyChange(Note.URI, null, false);
+            return Integer.parseInt(result[0].uri.getLastPathSegment());
+        }
+        return -1;
+    }
+
+    public boolean update(Context context) throws RemoteException, OperationApplicationException {
+        ContentProviderResult[] result;
+        ContentResolver resolver = context.getContentResolver();
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        Uri uri = Note.URI.buildUpon().appendPath(Integer.toString(mId)).build();
+        batch.add(ContentProviderOperation.newUpdate(uri)
+                .withValue(Note.COLUMN_NAME_NOTE_ID, mNoteId)
+                .withValue(Note.COLUMN_NAME_USER_ID, mUserId)
+                .withValue(Note.COLUMN_NAME_GROUP_ID, mGroupId)
+                .withValue(Note.COLUMN_NAME_TITLE, mTitle)
+                .withValue(Note.COLUMN_NAME_LIKES, mLikes)
+                .withValue(Note.COLUMN_NAME_DATE, mDate)
+                .withValue(Note.COLUMN_NAME_CONTENT, mContent)
+                .build());
+        result = resolver.applyBatch(Provider.AUTHORITY, batch);
+        resolver.notifyChange(Note.URI, null, false);
+        return result.length > 0;
+    }
+
+    public boolean delete(Context context) throws RemoteException, OperationApplicationException {
+        ContentProviderResult[] result;
+        ContentResolver resolver = context.getContentResolver();
+        ArrayList<ContentProviderOperation> batch = new ArrayList<ContentProviderOperation>();
+        Uri uri = Note.URI.buildUpon().appendPath(Integer.toString(mId)).build();
+        batch.add(ContentProviderOperation.newDelete(uri).build());
+        result = resolver.applyBatch(Provider.AUTHORITY, batch);
+        resolver.notifyChange(Note.URI, null, false);
+        return result.length > 0;
     }
 }

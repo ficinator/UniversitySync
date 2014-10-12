@@ -1,14 +1,19 @@
 package sk.mikme.universitysync.adapters;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
 import sk.mikme.universitysync.R;
+import sk.mikme.universitysync.fragments.NoteKeywordListFragment;
 import sk.mikme.universitysync.fragments.NotesFragment;
 import sk.mikme.universitysync.provider.User;
 
@@ -17,14 +22,14 @@ import sk.mikme.universitysync.provider.User;
  */
 public class HomePagerAdapter extends FragmentPagerAdapter {
 
-    private static final String[] TAB_TITLES = { "Notes", "Folders", "Files" };
-
     private FragmentManager mFragmentManager;
+    private String[] mTabTitles;
     private User mUser;
 
-    public HomePagerAdapter(FragmentManager fm, User user) {
+    public HomePagerAdapter(FragmentManager fm, String[] tabTitles, User user) {
         super(fm);
         mFragmentManager = fm;
+        mTabTitles = tabTitles;
         mUser = user;
     }
 
@@ -37,6 +42,8 @@ public class HomePagerAdapter extends FragmentPagerAdapter {
         switch (position) {
             case 0:
                 return new NotesFragment();
+            case 1:
+                return new NoteKeywordListFragment();
             default:
                 return new FakeFragment();
 
@@ -45,7 +52,7 @@ public class HomePagerAdapter extends FragmentPagerAdapter {
 
     @Override
     public CharSequence getPageTitle(int position) {
-        return TAB_TITLES[position].toUpperCase();
+        return mTabTitles[position];
     }
 
     @Override
@@ -60,10 +67,22 @@ public class HomePagerAdapter extends FragmentPagerAdapter {
     public static class FakeFragment extends Fragment {
 
         @Override
+        public void onCreate(Bundle savedStateInstance) {
+            super.onCreate(savedStateInstance);
+            setHasOptionsMenu(true);
+        }
+
+        @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
                                  Bundle savedInstanceState) {
             // Inflate the layout for this fragment
             return inflater.inflate(R.layout.fragment_fake, container, false);
+        }
+
+        @Override
+        public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+            super.onCreateOptionsMenu(menu, inflater);
+            inflater.inflate(R.menu.fake, menu);
         }
     }
 }

@@ -39,11 +39,7 @@ public class DrawerListAdapter extends ArrayAdapter<DrawerItem> {
         TextView titleView = (TextView) convertView.findViewById(R.id.title);
         titleView.setText(item.getTitle());
 
-        if (item instanceof  DrawerTitleItem) {
-            titleView.setText(item.getTitle().toUpperCase());
-        }
-        else {
-            titleView.setText(item.getTitle());
+        if (!(item instanceof  DrawerTitleItem)) {
             TextView subtitleView = (TextView) convertView.findViewById(R.id.subtitle);
             subtitleView.setText(item.getSubTitle());
         }

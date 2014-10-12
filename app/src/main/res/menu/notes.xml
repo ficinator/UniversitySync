@@ -1,0 +1,27 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item android:id="@+id/add"
+        android:icon="@drawable/ic_action_new"
+        android:title="@string/add_new"
+        android:orderInCategory="0"
+        app:showAsAction="ifRoom" />
+
+    <item android:id="@+id/edit"
+        android:icon="@drawable/ic_action_edit"
+        android:title="@string/edit"
+        android:orderInCategory="1"
+        app:showAsAction="ifRoom" />
+
+    <item android:id="@+id/delete"
+        android:icon="@drawable/ic_action_discard"
+        android:title="@string/delete"
+        android:orderInCategory="2"
+        app:showAsAction="ifRoom" />
+
+    <item android:id="@+id/sync"
+        android:icon="@drawable/ic_action_refresh"
+        android:title="@string/refresh"
+        android:orderInCategory="3"
+        app:showAsAction="ifRoom" />
+</menu>

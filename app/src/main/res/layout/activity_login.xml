@@ -7,7 +7,7 @@
     <LinearLayout android:id="@+id/form"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="@dimen/item_padding"
+        android:padding="@dimen/layout_padding"
         android:orientation="vertical">
 
         <TextView android:id="@+id/label_email"
